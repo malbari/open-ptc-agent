@@ -410,7 +410,9 @@ class MCPServerConnector:
                 }
             )
             response.raise_for_status()
-            result = response.json()
+            
+            # Parse SSE response format
+            result = self._parse_sse_response(response.text)
 
             if "error" in result:
                 msg = f"MCP error: {result['error']}"
@@ -443,6 +445,32 @@ class MCPServerConnector:
             )
             raise
 
+    def _parse_sse_response(self, response_text: str) -> dict:
+        """Parse SSE (Server-Sent Events) response format.
+        
+        SSE format example:
+        event: message
+        data: {"result":{...},"jsonrpc":"2.0","id":1}
+        
+        Args:
+            response_text: Raw SSE response text
+            
+        Returns:
+            Parsed JSON data from the SSE response
+        """
+        import json
+        
+        # Parse SSE format - look for 'data:' lines
+        for line in response_text.split('\n'):
+            line = line.strip()
+            if line.startswith('data:'):
+                json_str = line[5:].strip()  # Remove 'data:' prefix
+                if json_str:
+                    return json.loads(json_str)
+        
+        # Fallback: try to parse as plain JSON
+        return json.loads(response_text)
+
     async def _call_tool_http(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Call a tool via HTTP transport.
 
@@ -473,7 +501,9 @@ class MCPServerConnector:
             }
         )
         response.raise_for_status()
-        result = response.json()
+        
+        # Parse SSE response format
+        result = self._parse_sse_response(response.text)
 
         if "error" in result:
             msg = f"MCP tool call failed: {result['error']}"
