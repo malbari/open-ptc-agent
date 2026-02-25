@@ -251,6 +251,7 @@ class MCPServerConnector:
                 self._http_url = url
                 self._http_client = httpx.AsyncClient(timeout=60.0)
                 self._message_id = 0
+                self._session_id: str | None = None  # MCP session ID for stateful servers
 
                 # Discover tools via HTTP
                 await self._discover_tools_http()
@@ -392,6 +393,9 @@ class MCPServerConnector:
     async def _discover_tools_http(self) -> None:
         """Discover available tools via HTTP transport."""
         try:
+            # First, initialize the MCP session
+            await self._initialize_http_session()
+            
             # Send tools/list request
             self._message_id += 1
             request = {
@@ -404,10 +408,7 @@ class MCPServerConnector:
             response = await self._http_client.post(
                 self._http_url,
                 json=request,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json, text/event-stream",
-                }
+                headers=self._get_http_headers(),
             )
             response.raise_for_status()
             
@@ -444,6 +445,81 @@ class MCPServerConnector:
                 error=str(e),
             )
             raise
+
+    async def _initialize_http_session(self) -> None:
+        """Initialize MCP session via HTTP transport.
+        
+        The MCP protocol requires an initialize handshake before
+        calling other methods like tools/list.
+        """
+        try:
+            self._message_id += 1
+            request = {
+                "jsonrpc": "2.0",
+                "id": self._message_id,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "ptc-agent",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+
+            response = await self._http_client.post(
+                self._http_url,
+                json=request,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                }
+            )
+            response.raise_for_status()
+            
+            # Extract session ID from response headers if present
+            session_id = response.headers.get("mcp-session-id")
+            if session_id:
+                self._session_id = session_id
+                logger.debug(
+                    "MCP session ID received",
+                    server=self.config.name,
+                    session_id=session_id,
+                )
+            
+            result = self._parse_sse_response(response.text)
+            
+            if "error" in result:
+                logger.warning(
+                    "MCP initialize returned error (continuing anyway)",
+                    server=self.config.name,
+                    error=result["error"],
+                )
+            else:
+                logger.debug(
+                    "MCP session initialized",
+                    server=self.config.name,
+                    result=result.get("result", {}),
+                )
+                
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize MCP session (continuing anyway)",
+                server=self.config.name,
+                error=str(e),
+            )
+            # Don't raise - some servers may not require initialization
+    
+    def _get_http_headers(self) -> dict[str, str]:
+        """Get HTTP headers including session ID if available."""
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        if self._session_id:
+            headers["mcp-session-id"] = self._session_id
+        return headers
 
     def _parse_sse_response(self, response_text: str) -> dict:
         """Parse SSE (Server-Sent Events) response format.
@@ -495,10 +571,7 @@ class MCPServerConnector:
         response = await self._http_client.post(
             self._http_url,
             json=request,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream",
-            }
+            headers=self._get_http_headers(),
         )
         response.raise_for_status()
         
