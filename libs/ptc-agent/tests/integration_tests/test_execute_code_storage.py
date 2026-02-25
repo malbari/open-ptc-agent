@@ -1,6 +1,6 @@
 """Integration tests for execute_code tool with cloud storage image upload.
 
-These tests require a running Daytona sandbox and verify:
+These tests require a running local sandbox (ipybox) and verify:
 1. Basic code execution in sandbox
 2. Matplotlib chart generation with plt.show() (artifact capture)
 3. Matplotlib chart generation with plt.savefig() (file detection)

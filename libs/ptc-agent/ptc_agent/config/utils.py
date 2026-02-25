@@ -18,10 +18,10 @@ from dotenv import load_dotenv
 
 if TYPE_CHECKING:
     from ptc_agent.config.core import (
-        DaytonaConfig,
         FilesystemConfig,
         LoggingConfig,
         MCPConfig,
+        SandboxConfig,
         SecurityConfig,
     )
 
@@ -120,13 +120,7 @@ def validate_section_fields(
 
 
 # Common field requirements for shared config sections
-DAYTONA_REQUIRED_FIELDS = [
-    "base_url",
-    "auto_stop_interval",
-    "auto_archive_interval",
-    "auto_delete_interval",
-    "python_version",
-]
+SANDBOX_REQUIRED_FIELDS: list[str] = []  # All fields have defaults
 
 SECURITY_REQUIRED_FIELDS = [
     "max_execution_time",
@@ -147,30 +141,24 @@ FILESYSTEM_REQUIRED_FIELDS = ["allowed_directories"]
 # Factory functions for creating config objects from dictionaries
 
 
-def create_daytona_config(data: dict[str, Any]) -> DaytonaConfig:
-    """Create DaytonaConfig from config data dictionary.
+def create_sandbox_config(data: dict[str, Any] | None = None) -> SandboxConfig:
+    """Create SandboxConfig from config data dictionary.
 
     Args:
-        data: Daytona section from config.yaml
+        data: Sandbox section from config.yaml (optional, uses defaults if not provided)
 
     Returns:
-        Configured DaytonaConfig object
+        Configured SandboxConfig object
     """
-    import os
+    from ptc_agent.config.core import SandboxConfig
 
-    from ptc_agent.config.core import DaytonaConfig
+    if data is None:
+        return SandboxConfig()
 
-    validate_section_fields(data, DAYTONA_REQUIRED_FIELDS, "daytona")
-    return DaytonaConfig(
-        api_key=os.getenv("DAYTONA_API_KEY", ""),
-        base_url=data["base_url"],
-        auto_stop_interval=data["auto_stop_interval"],
-        auto_archive_interval=data["auto_archive_interval"],
-        auto_delete_interval=data["auto_delete_interval"],
-        python_version=data["python_version"],
-        snapshot_enabled=data.get("snapshot_enabled", True),
-        snapshot_name=data.get("snapshot_name"),
-        snapshot_auto_create=data.get("snapshot_auto_create", True),
+    return SandboxConfig(
+        working_directory=data.get("working_directory", "/home/daytona"),
+        python_version=data.get("python_version", "3.12"),
+        auto_install_dependencies=data.get("auto_install_dependencies", True),
     )
 
 
@@ -249,6 +237,7 @@ def create_filesystem_config(data: dict[str, Any]) -> FilesystemConfig:
 
     validate_section_fields(data, FILESYSTEM_REQUIRED_FIELDS, "filesystem")
     return FilesystemConfig(
+        working_directory=data.get("working_directory", "/home/daytona"),
         allowed_directories=data["allowed_directories"],
         enable_path_validation=data.get("enable_path_validation", True),
     )

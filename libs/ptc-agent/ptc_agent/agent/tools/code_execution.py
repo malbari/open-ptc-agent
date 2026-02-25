@@ -113,7 +113,7 @@ def create_execute_code_tool(sandbox: Any, mcp_registry: Any) -> BaseTool:
                     # LLMs sometimes use absolute paths despite prompt instructions
                     if not uploaded_images:
                         try:
-                            # Call Daytona SDK directly to bypass path validation.
+                            # Access sandbox filesystem directly to bypass path validation.
                             # LLMs sometimes use absolute /results despite prompt instructions.
                             assert sandbox.sandbox is not None
                             root_results_raw = await sandbox.sandbox.fs.list_files("/results")

@@ -2,7 +2,7 @@
 
 This module creates a PTC agent that:
 - Uses langchain's create_agent with custom middleware stack
-- Integrates Daytona sandbox via DaytonaBackend
+- Integrates local sandbox via LocalBackend (ipybox)
 - Provides MCP tools through execute_code
 - Supports sub-agent delegation for specialized tasks
 """
@@ -12,7 +12,7 @@ from typing import Any
 import structlog
 from langchain.agents import create_agent
 
-from ptc_agent.agent.backends import DaytonaBackend
+from ptc_agent.agent.backends import LocalBackend
 from ptc_agent.agent.middleware import (
     BackgroundSubagentMiddleware,
     BackgroundSubagentOrchestrator,
@@ -63,7 +63,7 @@ class PTCAgent:
 
     This agent:
     - Uses langchain's create_agent with custom middleware stack
-    - Integrates Daytona sandbox via DaytonaBackend
+    - Integrates local sandbox via LocalBackend (ipybox)
     - Provides execute_code tool for MCP tool invocation
     - Supports sub-agent delegation for specialized tasks
     """
@@ -217,7 +217,7 @@ class PTCAgent:
 
         # Always create backend for FilesystemMiddleware
         # (it handles ls, and provides fallback for other operations)
-        backend = DaytonaBackend(sandbox)
+        backend = LocalBackend(sandbox)
 
         # Conditional tool loading based on config
         filesystem_tools = []  # Will be passed to subagents

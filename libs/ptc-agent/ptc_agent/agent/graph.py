@@ -26,7 +26,7 @@ async def _ensure_initialized() -> tuple:
 
     This function lazily initializes:
     - AgentConfig from config.yaml via load_from_files()
-    - SessionManager with Daytona sandbox
+    - SessionManager with ipybox sandbox
     - PTCAgent instance
 
     Returns:

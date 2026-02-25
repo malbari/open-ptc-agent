@@ -4,7 +4,7 @@ An open source implementation of Programmatic Tool Calling (PTC) with MCP,
 where agents generate executable Python code to interact with MCP servers.
 
 This package provides the core infrastructure:
-- PTCSandbox: Daytona sandbox management
+- PTCSandbox: Local sandbox management with ipybox
 - MCPRegistry: MCP server connections and tool discovery
 - ToolFunctionGenerator: Convert MCP schemas to Python functions
 - Session/SessionManager: Session lifecycle management

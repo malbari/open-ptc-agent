@@ -1,5 +1,5 @@
-"""Backend implementations for deepagent middleware."""
+"""Backend implementations for PTC Agent."""
 
-from .daytona import DaytonaBackend
+from .local import LocalBackend
 
-__all__ = ["DaytonaBackend"]
+__all__ = ["LocalBackend"]

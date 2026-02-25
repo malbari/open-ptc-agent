@@ -1,6 +1,6 @@
 # PTC Agent
 
-Core agent package for Programmatic Tool Calling (PTC) - an AI agent framework built on LangGraph that executes code in secure Daytona sandboxes and integrates with MCP (Model Context Protocol) servers for extensible tool capabilities.
+Core agent package for Programmatic Tool Calling (PTC) - an AI agent framework built on LangGraph that executes code locally using ipybox (IPython kernel) and integrates with MCP (Model Context Protocol) servers for extensible tool capabilities.
 
 > **Note**: This package is not yet published to PyPI. Install from the repository root or local source.
 
@@ -11,18 +11,18 @@ ptc_agent/
 ├── agent/                    # Agent implementation
 │   ├── agent.py              # PTCAgent, PTCExecutor classes
 │   ├── graph.py              # Agent graph construction
-│   ├── backends/             # Sandbox backends (Daytona)
+│   ├── backends/             # Sandbox backends (Local)
 │   ├── middleware/           # Middleware stack (deepagent, plan_mode, background)
 │   ├── tools/                # Built-in tools (bash.py, code_execution.py, file_ops.py, glob.py, grep.py, tavily.py, think.py)
 │   ├── subagents/            # Subagent definitions (general, research)
 │   └── prompts/              # Jinja2 prompt templates
 ├── config/                   # Configuration system
-│   ├── core.py               # CoreConfig, MCPServerConfig
+│   ├── core.py               # CoreConfig, MCPServerConfig, SandboxConfig
 │   ├── agent.py              # AgentConfig, LLMConfig
 │   ├── loaders.py            # File-based config loading
 │   └── utils.py              # Config utilities
 ├── core/                     # Core infrastructure
-│   ├── sandbox.py            # PTCSandbox (Daytona wrapper)
+│   ├── sandbox.py            # PTCSandbox (ipybox wrapper)
 │   ├── mcp_registry.py       # MCPRegistry (tool discovery)
 │   ├── session.py            # Session, SessionManager
 │   ├── security.py           # Code validation
@@ -35,7 +35,7 @@ ptc_agent/
 
 - **agent/**: Main `PTCAgent` class with middleware stack (background agent orchestration, plan mode, background tasks), built-in tools, subagent system, and Jinja2-based prompt templates
 - **config/**: Two configuration modes - programmatic via `AgentConfig.create()` or file-based via `load_from_files()` for YAML configs
-- **core/**: Infrastructure layer with `PTCSandbox` for Daytona code execution, `MCPRegistry` for MCP server management, and `SessionManager` for conversation lifecycle
+- **core/**: Infrastructure layer with `PTCSandbox` for local code execution via ipybox, `MCPRegistry` for MCP server management, and `SessionManager` for conversation lifecycle
 - **utils/**: Cloud storage uploaders supporting AWS S3, Cloudflare R2, and Alibaba Cloud OSS
 
 ## Installation
@@ -206,10 +206,10 @@ config = AgentConfig.create(
 ```python
 config = AgentConfig.create(
     llm=llm,
-    # Daytona settings
-    daytona_base_url="https://app.daytona.io/api",
+    # Sandbox settings
+    working_directory="/home/daytona",
     python_version="3.12",
-    auto_stop_interval=3600,
+    auto_install_dependencies=True,
 
     # Security
     max_execution_time=300,
@@ -228,14 +228,25 @@ config = AgentConfig.create(
 ## Requirements
 
 - Python 3.12+
-- Daytona account ([app.daytona.io](https://app.daytona.io))
 - LLM API key (Anthropic, OpenAI, etc.)
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DAYTONA_API_KEY` | Yes | Daytona sandbox API key |
 | `ANTHROPIC_API_KEY` | Depends | Required if using Anthropic models |
 | `OPENAI_API_KEY` | Depends | Required if using OpenAI models |
 | MCP server keys | Optional | e.g., `TAVILY_API_KEY` for web search |
+
+## Local Code Execution
+
+This package uses [ipybox](https://github.com/gradion-ai/ipybox) for local Python code execution. Code runs in an IPython kernel within the same container, providing:
+
+- **Stateful execution**: Variables and definitions persist across executions
+- **Auto-install**: Missing packages are automatically installed
+- **Chart capture**: Matplotlib charts are captured and returned as base64 images
+- **No remote API dependency**: Everything runs locally without external sandbox services
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

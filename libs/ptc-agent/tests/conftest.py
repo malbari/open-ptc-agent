@@ -21,16 +21,17 @@ from ptc_agent.core.mcp_registry import MCPRegistry, MCPToolInfo
 def mock_core_config():
     """Create a mock CoreConfig for sandbox testing.
 
-    Use this for tests that need filesystem/daytona/mcp configuration.
+    Use this for tests that need filesystem/sandbox/mcp configuration.
     """
     config = Mock()
     config.filesystem = Mock()
     config.filesystem.working_directory = "/home/daytona"
     config.filesystem.allowed_directories = ["/home/daytona", "/tmp"]
     config.filesystem.enable_path_validation = True
-    config.daytona = Mock()
-    config.daytona.api_key = "test-key"
-    config.daytona.base_url = "https://api.daytona.io"
+    config.sandbox = Mock()
+    config.sandbox.working_directory = "/home/daytona"
+    config.sandbox.python_version = "3.12"
+    config.sandbox.auto_install_dependencies = True
     config.mcp = Mock()
     config.mcp.servers = []
     config.mcp.tool_exposure_mode = "summary"

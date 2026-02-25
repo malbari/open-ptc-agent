@@ -1,7 +1,7 @@
 """Unified configuration package for Open PTC Agent.
 
 This package consolidates all configuration-related code:
-- core.py: Core infrastructure configs (Daytona, MCP, Filesystem, Security, Logging)
+- core.py: Core infrastructure configs (Sandbox, MCP, Filesystem, Security, Logging)
 - agent.py: Agent-specific configs (AgentConfig, LLMConfig, LLMDefinition)
 - loaders.py: File-based configuration loading
 - utils.py: Shared utilities for config parsing
@@ -32,11 +32,11 @@ from ptc_agent.config.agent import (
 )
 from ptc_agent.config.core import (
     CoreConfig,
-    DaytonaConfig,
     FilesystemConfig,
     LoggingConfig,
     MCPConfig,
     MCPServerConfig,
+    SandboxConfig,
     SecurityConfig,
 )
 
@@ -69,13 +69,13 @@ __all__ = [
     "ConfigContext",
     # Core data classes
     "CoreConfig",
-    "DaytonaConfig",
     "FilesystemConfig",
     "LLMConfig",
     "LLMDefinition",
     "LoggingConfig",
     "MCPConfig",
     "MCPServerConfig",
+    "SandboxConfig",
     "SecurityConfig",
     # Utilities
     "configure_logging",

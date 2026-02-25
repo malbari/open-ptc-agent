@@ -31,10 +31,10 @@ from ptc_agent.config.agent import AgentConfig, LLMConfig, LLMDefinition, Skills
 from ptc_agent.config.core import CoreConfig
 from ptc_agent.config.utils import (
     configure_logging,
-    create_daytona_config,
     create_filesystem_config,
     create_logging_config,
     create_mcp_config,
+    create_sandbox_config,
     create_security_config,
     load_dotenv_async,
     load_yaml_file,
@@ -310,11 +310,11 @@ async def load_core_from_files(
     config_data = await load_yaml_file(config_file)
 
     # Validate that all required sections exist in config.yaml
-    required_sections = ["daytona", "security", "mcp", "logging", "filesystem"]
+    required_sections = ["security", "mcp", "logging", "filesystem"]
     validate_required_sections(config_data, required_sections)
 
     # Load configurations using shared factory functions
-    daytona_config = create_daytona_config(config_data["daytona"])
+    sandbox_config = create_sandbox_config(config_data.get("sandbox"))
     security_config = create_security_config(config_data["security"])
     mcp_config = create_mcp_config(config_data["mcp"])
     logging_config = create_logging_config(config_data["logging"])
@@ -322,7 +322,7 @@ async def load_core_from_files(
 
     # Create config object
     core_config = CoreConfig(
-        daytona=daytona_config,
+        sandbox=sandbox_config,
         security=security_config,
         mcp=mcp_config,
         logging=logging_config,
@@ -362,7 +362,7 @@ def load_from_dict(
         ValueError: If required configuration is missing or invalid
     """
     # Validate that all required sections exist
-    required_sections = ["llm", "daytona", "security", "mcp", "logging", "filesystem"]
+    required_sections = ["llm", "security", "mcp", "logging", "filesystem"]
     validate_required_sections(config_data, required_sections)
 
     # Load LLM configuration
@@ -416,7 +416,7 @@ def load_from_dict(
     llm_config = LLMConfig(name=llm_name)
 
     # Load configurations using shared factory functions
-    daytona_config = create_daytona_config(config_data["daytona"])
+    sandbox_config = create_sandbox_config(config_data.get("sandbox"))
     security_config = create_security_config(config_data["security"])
     mcp_config = create_mcp_config(config_data["mcp"])
     logging_config = create_logging_config(config_data["logging"])
@@ -449,7 +449,7 @@ def load_from_dict(
         llm=llm_config,
         security=security_config,
         logging=logging_config,
-        daytona=daytona_config,
+        sandbox=sandbox_config,
         mcp=mcp_config,
         filesystem=filesystem_config,
         skills=skills_config,
@@ -554,13 +554,12 @@ llm:
 #   parameters:
 #     max_tokens: 4096
 
-# Daytona Sandbox
-# ---------------
-daytona:
-  base_url: "https://app.daytona.io/api"
-  # api_key: set DAYTONA_API_KEY in environment or .env file
+# Sandbox Configuration (local execution with ipybox)
+# ---------------------------------------------------
+sandbox:
+  working_directory: "/home/daytona"
   python_version: "3.12"
-  auto_stop_interval: 3600  # 1 hour
+  auto_install_dependencies: true
 
 # MCP Servers (optional)
 # ----------------------
@@ -648,36 +647,30 @@ def generate_config_template(
 ) -> dict[str, Path]:
     """Generate config.yaml and optionally llms.json templates.
 
-    This is useful for CLI 'config init' commands or first-run setup.
-
     Args:
-        output_dir: Directory to write config files
+        output_dir: Directory to write templates to
         include_llms: Whether to generate llms.json template
         overwrite: Whether to overwrite existing files
 
     Returns:
-        Dict mapping filename to path of created file
+        Dictionary mapping filename to Path of created files
 
     Raises:
-        FileExistsError: If file exists and overwrite is False
+        FileExistsError: If files exist and overwrite=False
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    created = {}
+    created: dict[str, Path] = {}
 
-    # Write config.yaml
     config_path = output_dir / "config.yaml"
     if config_path.exists() and not overwrite:
-        msg = f"Config file already exists: {config_path}"
-        raise FileExistsError(msg)
+        raise FileExistsError(f"config.yaml already exists at {config_path}")
     config_path.write_text(CONFIG_TEMPLATE)
     created["config.yaml"] = config_path
 
-    # Write llms.json if requested
     if include_llms:
         llms_path = output_dir / "llms.json"
         if llms_path.exists() and not overwrite:
-            msg = f"LLMs file already exists: {llms_path}"
-            raise FileExistsError(msg)
+            raise FileExistsError(f"llms.json already exists at {llms_path}")
         llms_path.write_text(LLMS_TEMPLATE)
         created["llms.json"] = llms_path
 

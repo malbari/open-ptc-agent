@@ -10,7 +10,7 @@ The project uses two main configuration files:
 
 | File | Purpose |
 |------|---------|
-| `config.yaml` | Main configuration - LLM selection, MCP servers, Daytona sandbox, security, storage, logging |
+| `config.yaml` | Main configuration - LLM selection, MCP servers, local sandbox, security, storage, logging |
 | `llms.json` | LLM provider definitions - model IDs, SDKs, API keys |
 
 Credentials are stored separately in `.env` (see `.env.example`).
@@ -71,23 +71,22 @@ Available options depend on what's defined in `llms.json`. Pre-configured models
 
 ---
 
-### Daytona Sandbox
+### Local Sandbox (ipybox)
 
 ```yaml
-daytona:
-  base_url: "https://app.daytona.io/api"
-  auto_stop_interval: 3600      # 1 hour - sandbox auto-stops after inactivity
-  auto_archive_interval: 86400  # 24 hours - sandbox archived
-  auto_delete_interval: 604800  # 7 days - sandbox deleted
-  python_version: "3.12"
-
-  # Snapshot configuration (recommended for faster startup)
-  snapshot_enabled: true        # Use snapshots for 7x faster initialization
-  snapshot_name: "open-ptc-v1"  # Base name (hash appended automatically)
-  snapshot_auto_create: true    # Create snapshot if missing
+sandbox:
+  working_directory: "/home/daytona"  # Default working directory
+  python_version: "3.12"              # Python version for execution
+  auto_install_dependencies: true     # Auto-install missing packages
 ```
 
-**Snapshots**: First sandbox creation takes ~10-15 minutes to install dependencies. With snapshots enabled, subsequent sandboxes initialize in ~8 seconds.
+**Local Execution**: Code is executed locally using ipybox's IPython kernel. No remote API or external sandbox service is required. The kernel maintains state between executions, allowing for iterative development.
+
+**Features**:
+- Stateful IPython kernel execution
+- Automatic installation of missing Python packages
+- Chart/image capture and upload to cloud storage
+- No external API keys required for sandbox functionality
 
 ---
 

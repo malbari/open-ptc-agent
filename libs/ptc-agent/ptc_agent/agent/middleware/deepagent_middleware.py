@@ -46,7 +46,7 @@ def create_deepagent_middleware(
         model: LLM model instance
         tools: List of tools for the agent
         subagents: List of subagent configurations
-        backend: DaytonaBackend instance for FilesystemMiddleware
+        backend: LocalBackend instance for FilesystemMiddleware
         skill_sources: List of sandbox paths to skill directories (e.g., ["/home/daytona/skills/user"])
         custom_middleware: Additional middleware to append (e.g., ViewImageMiddleware)
         max_tokens_before_summary: Token threshold for summarization (default: 170000)

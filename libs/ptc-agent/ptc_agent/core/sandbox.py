@@ -1,27 +1,27 @@
-"""PTC Sandbox - Manages Daytona sandbox for Programmatic Tool Calling execution."""
+"""PTC Sandbox - Manages local code execution using ipybox for Programmatic Tool Calling.
+
+This module provides a sandbox environment that runs Python code locally using
+ipybox's IPython kernel, eliminating the need for remote Daytona API calls.
+"""
 
 import asyncio
-import base64
 import hashlib
 import json
+import os
 import shlex
+import subprocess
 import textwrap
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
 import aiofiles
 import structlog
-from daytona_sdk import AsyncDaytona, DaytonaConfig
-from daytona_sdk.common.daytona import (
-    CreateSandboxFromSnapshotParams,
-    Image,
-)
-from daytona_sdk.common.snapshot import CreateSnapshotParams
+
+from ipybox import CodeExecutor, CodeExecutionResult, CodeExecutionError
 
 from ptc_agent.config.core import CoreConfig
 
@@ -29,19 +29,6 @@ from .mcp_registry import MCPRegistry
 from .tool_generator import ToolFunctionGenerator
 
 logger = structlog.get_logger(__name__)
-
-
-class SandboxTransientError(RuntimeError):
-    """Transient sandbox transport error.
-
-    Raised when an operation fails due to transient transport issues and cannot be
-    safely retried automatically.
-    """
-
-
-class _DaytonaRetryPolicy(Enum):
-    SAFE = "safe"
-    UNSAFE = "unsafe"
 
 
 @dataclass
@@ -70,11 +57,13 @@ class ExecutionResult:
 
 
 class PTCSandbox:
-    """Manages Daytona sandbox for Programmatic Tool Calling (PTC) execution."""
+    """Manages local code execution using ipybox for Programmatic Tool Calling (PTC).
 
-    SNAPSHOT_PYTHON_VERSION = "3.12"  # Intentionally pinned for stability/compatibility.
+    This sandbox runs Python code locally using ipybox's IPython kernel,
+    providing a stateful execution environment without remote API dependencies.
+    """
 
-    # Default Python dependencies installed in sandbox
+    # Default Python dependencies available in the environment
     DEFAULT_DEPENDENCIES = [
         # Core
         "mcp", "fastmcp", "pandas", "requests", "aiohttp", "httpx",
@@ -103,25 +92,21 @@ class PTCSandbox:
         self.config = config
         self.mcp_registry = mcp_registry
 
-        # Initialize Daytona with proper config
-        daytona_config = DaytonaConfig(
-            api_key=config.daytona.api_key,
-            api_url=config.daytona.base_url
-        )
-        self.daytona_client = AsyncDaytona(daytona_config)
-
-        # External Daytona SDK sandbox object - Any type is required since it's from external SDK
-        self.sandbox: Any | None = None
+        # ipybox code executor
+        self._code_executor: CodeExecutor | None = None
         self.sandbox_id: str | None = None
         self.tool_generator = ToolFunctionGenerator()
         self.execution_count = 0
         self.bash_execution_count = 0
 
-        self._reconnect_lock = asyncio.Lock()
-        self._reconnect_inflight: asyncio.Future[None] | None = None
+        # Working directory for local file operations
+        self._work_dir = Path(config.filesystem.working_directory)
+        self._tools_dir = self._work_dir / "tools"
+        self._results_dir = self._work_dir / "results"
+        self._data_dir = self._work_dir / "data"
+        self._code_dir = self._work_dir / "code"
 
-        logger.info("Initialized PTCSandbox")
-
+        logger.info("Initialized PTCSandbox with ipybox backend", work_dir=str(self._work_dir))
 
     def _get_mcp_packages(self) -> list[str]:
         """Extract MCP package names from enabled stdio servers.
@@ -141,7 +126,7 @@ class PTCSandbox:
         return mcp_packages
 
     def _normalize_search_path(self, path: str) -> str:
-        """Normalize search path to absolute sandbox path.
+        """Normalize search path to absolute local path.
 
         Converts relative/virtual paths to absolute paths for search operations.
 
@@ -149,284 +134,54 @@ class PTCSandbox:
             path: Path to normalize (".", relative, or absolute)
 
         Returns:
-            Absolute sandbox path
+            Absolute local path
         """
         if path == ".":
-            return self.config.filesystem.working_directory
+            return str(self._work_dir)
         if not path.startswith("/"):
-            return f"{self.config.filesystem.working_directory}/{path}"
+            return str(self._work_dir / path)
         return path
 
-    def _create_snapshot_image(self) -> Image:
-        """Create image definition for snapshot with Node.js and MCP servers.
+    async def setup_sandbox_workspace(self) -> str | None:
+        """Create local workspace directories.
 
         Returns:
-            Image definition with base dependencies and configuration
+            None (no snapshot name needed for local execution)
         """
-        # Use class-level default dependencies
-        dependencies = self.DEFAULT_DEPENDENCIES
+        logger.info("Setting up local workspace")
 
-        # Get MCP server npm packages from config (only enabled servers)
-        mcp_packages = self._get_mcp_packages()
+        # Create workspace directories
+        self._work_dir.mkdir(parents=True, exist_ok=True)
+        self._tools_dir.mkdir(parents=True, exist_ok=True)
+        (self._tools_dir / "docs").mkdir(parents=True, exist_ok=True)
+        self._results_dir.mkdir(parents=True, exist_ok=True)
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        self._code_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build image using declarative builder
-        # Note: Directories are created in _setup_workspace(), not in snapshot
-        if self.config.daytona.python_version != self.SNAPSHOT_PYTHON_VERSION:
-            logger.debug(
-                "Ignoring configured python version for snapshots",
-                configured=self.config.daytona.python_version,
-                pinned=self.SNAPSHOT_PYTHON_VERSION,
-            )
-        base_image = Image.debian_slim(self.SNAPSHOT_PYTHON_VERSION)
-
-        image = (
-            base_image
-            .run_commands(
-                # Install system dependencies including ripgrep for fast search
-                "apt-get update",
-                "apt-get install -y curl ripgrep jq git unzip",
-                # Install uv for fast Python package management
-                "curl -LsSf https://astral.sh/uv/install.sh | sh",
-                "mv /root/.local/bin/uv /usr/local/bin/uv",
-                # Install Node.js 20.x LTS
-                "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
-                "apt-get install -y nodejs",
-                # Install MCP server packages globally
-                *[f"npm install -g {pkg}" for pkg in mcp_packages],
-                # Clean up apt cache to reduce image size
-                "apt-get clean",
-                "rm -rf /var/lib/apt/lists/*",
-            )
-            .pip_install(*dependencies)  # Unpack list as individual arguments
-            .workdir("/home/daytona")
-        )
+        # Generate sandbox ID based on working directory
+        self.sandbox_id = hashlib.sha256(str(self._work_dir).encode()).hexdigest()[:8]
 
         logger.info(
-            "Created snapshot image definition",
-            python_version=self.SNAPSHOT_PYTHON_VERSION,
-            dependencies=dependencies,
-            mcp_packages=mcp_packages,
+            "Local workspace ready",
+            work_dir=str(self._work_dir),
+            sandbox_id=self.sandbox_id,
         )
-
-        return image
-
-    def _get_snapshot_hash(self) -> str:
-        """Generate hash for snapshot versioning based on configuration.
-
-        Returns:
-            8-character hash of snapshot configuration
-        """
-        # Get MCP server npm packages from config (only enabled servers)
-        mcp_packages = self._get_mcp_packages()
-
-        # Include configuration that affects the snapshot in the hash
-        config_data = {
-            "python_version": self.SNAPSHOT_PYTHON_VERSION,
-            "dependencies": self.DEFAULT_DEPENDENCIES,
-            "mcp_packages": sorted(mcp_packages),  # Include MCP packages in hash
-            "apt_packages": ["curl", "nodejs", "ripgrep", "uv", "jq", "git", "unzip"],  # Include apt/curl-installed packages in hash
-        }
-
-        config_str = json.dumps(config_data, sort_keys=True)
-        return hashlib.sha256(config_str.encode()).hexdigest()[:8]
-
-    async def _ensure_snapshot(self) -> str | None:
-        """Ensure snapshot exists, create if needed.
-
-        Returns:
-            Snapshot name if available, None otherwise
-        """
-        if not self.config.daytona.snapshot_enabled:
-            logger.debug("Snapshot feature disabled in config")
-            return None
-
-        # Generate versioned snapshot name with config hash
-        config_hash = self._get_snapshot_hash()
-        base_name = self.config.daytona.snapshot_name or "ptc-base"
-        snapshot_name = f"{base_name}-{config_hash}"
-
-        logger.info("Checking for snapshot", snapshot_name=snapshot_name)
-
-        # Check if snapshot exists and is usable
-        try:
-            snapshots_result = await self._daytona_call(
-                self.daytona_client.snapshot.list,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-                allow_reconnect=False,
-            )
-            snapshots = snapshots_result.items if hasattr(snapshots_result, "items") else snapshots_result
-
-            # Only consider active or building snapshots as existing
-            # Failed snapshots should be recreated
-            snapshot_obj = None
-            for s in snapshots:
-                if hasattr(s, "name") and s.name == snapshot_name:
-                    snapshot_obj = s
-                    break
-
-            if snapshot_obj:
-                state = snapshot_obj.state.value if hasattr(snapshot_obj.state, "value") else str(snapshot_obj.state)
-                if state == "build_failed":
-                    logger.warning(
-                        "Found failed snapshot, will recreate",
-                        snapshot_name=snapshot_name,
-                        error=snapshot_obj.error_reason
-                    )
-                    # Delete failed snapshot
-                    try:
-                        await self._daytona_call(
-                            self.daytona_client.snapshot.delete,
-                            snapshot_obj,
-                            retry_policy=_DaytonaRetryPolicy.SAFE,
-                            allow_reconnect=False,
-                        )
-                        logger.info("Deleted failed snapshot", snapshot_name=snapshot_name)
-                        # Give the deletion a moment to complete
-                        await asyncio.sleep(2)
-                    except OSError as del_err:
-                        logger.warning("Could not delete failed snapshot", error=str(del_err))
-                    snapshot_exists = False
-                elif state in ["active", "building"]:
-                    snapshot_exists = True
-                else:
-                    logger.warning(f"Snapshot in unexpected state: {state}")
-                    snapshot_exists = False
-            else:
-                snapshot_exists = False
-
-        except OSError as e:
-            logger.warning("Error listing snapshots", error=str(e))
-            snapshot_exists = False
-
-        # Create snapshot if it doesn't exist
-        if not snapshot_exists and self.config.daytona.snapshot_auto_create:
-            logger.info("Creating snapshot", snapshot_name=snapshot_name)
-            image = self._create_snapshot_image()
-
-            try:
-                await self._daytona_call(
-                    self.daytona_client.snapshot.create,
-                    CreateSnapshotParams(
-                        name=snapshot_name,
-                        image=image,
-                    ),
-                    on_logs=lambda log: logger.debug("Snapshot build", log=log),
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                    allow_reconnect=False,
-                )
-                logger.info("Snapshot created successfully", snapshot_name=snapshot_name)
-                return snapshot_name
-            except OSError as e:
-                error_str = str(e)
-                # Check if snapshot already exists (race condition or list failed)
-                if "already exists" in error_str.lower():
-                    logger.info(
-                        "Snapshot already exists, will use it",
-                        snapshot_name=snapshot_name
-                    )
-                    return snapshot_name
-                logger.error("Failed to create snapshot", error=error_str)
-                return None
-
-        if snapshot_exists:
-            logger.info("Using existing snapshot", snapshot_name=snapshot_name)
-            return snapshot_name
-
-        logger.warning("Snapshot not found and auto_create disabled")
         return None
 
-    async def setup_sandbox_workspace(self) -> str | None:
-        """Create sandbox and setup workspace directories.
-
-        Can run concurrently with MCP registry connection since it doesn't
-        require the registry.
-
-        Returns:
-            snapshot_name if used, None otherwise
-        """
-        logger.info("Setting up sandbox workspace")
-
-        # Try to use snapshot if enabled
-        snapshot_name = await self._ensure_snapshot()
-
-        if snapshot_name:
-            # Create sandbox from snapshot (FAST!)
-            logger.info("Creating sandbox from snapshot", snapshot_name=snapshot_name)
-            try:
-                self.sandbox = await self._daytona_call(
-                    self.daytona_client.create,
-                    CreateSandboxFromSnapshotParams(snapshot=snapshot_name),
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                    allow_reconnect=False,
-                )
-                logger.info("Sandbox created from snapshot", snapshot_name=snapshot_name)
-            except OSError as e:
-                logger.warning(
-                    "Failed to create from snapshot, falling back to default",
-                    error=str(e)
-                )
-                snapshot_name = None
-
-        if not snapshot_name:
-            # Fallback to default creation
-            logger.info("Creating sandbox from default image")
-            self.sandbox = await self._daytona_call(
-                self.daytona_client.create,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-                allow_reconnect=False,
-            )
-            assert self.sandbox is not None
-
-            sandbox = self.sandbox
-            self.sandbox_id = sandbox.id if hasattr(sandbox, "id") else str(id(sandbox))
-            logger.info("Daytona sandbox created", sandbox_id=self.sandbox_id)
-
-            # Set up workspace structure
-            await self._setup_workspace()
-
-            # Install dependencies
-            await self._install_dependencies()
-        else:
-            # Snapshot-based creation
-            assert self.sandbox is not None
-            sandbox = self.sandbox
-            self.sandbox_id = sandbox.id if hasattr(sandbox, "id") else str(id(sandbox))
-            logger.info(
-                "Sandbox ready from snapshot",
-                sandbox_id=self.sandbox_id,
-                snapshot=snapshot_name
-            )
-            # Ensure workspace directories exist (results, data, etc.)
-            await self._setup_workspace()
-
-        logger.info("Sandbox workspace ready", sandbox_id=self.sandbox_id)
-        return snapshot_name
-
     async def setup_tools_and_mcp(self, snapshot_name: str | None) -> None:
-        """Install tool modules and start MCP servers.
-
-        Requires MCP registry to be connected first.
+        """Install tool modules and setup MCP server configurations.
 
         Args:
-            snapshot_name: Snapshot name from setup_sandbox_workspace(), or None
+            snapshot_name: Not used for local execution (kept for API compatibility)
         """
         logger.info("Setting up tools and MCP servers")
 
-        # Upload custom Python MCP server files to sandbox
-        await self._upload_mcp_server_files()
-
-        # Always generate and install tool modules (dynamic content)
+        # Generate and install tool modules
         await self._install_tool_modules()
 
-        # Start internal MCP servers (when using snapshot with Node.js)
-        if snapshot_name:
-            # Node.js and MCP packages are available in snapshot
-            await self._start_internal_mcp_servers()
-        else:
-            logger.warning(
-                "Skipping internal MCP servers - not using snapshot. "
-                "MCP tools will not work without snapshot."
-            )
+        # Initialize MCP server sessions
+        self.mcp_server_sessions: dict[str, Any] = {}
+        await self._setup_mcp_server_sessions()
 
         logger.info("Tools and MCP servers ready", sandbox_id=self.sandbox_id)
 
@@ -436,259 +191,90 @@ class PTCSandbox:
         For async initialization, use setup_sandbox_workspace() and
         setup_tools_and_mcp() separately via Session.initialize().
         """
-        snapshot_name = await self.setup_sandbox_workspace()
-        await self.setup_tools_and_mcp(snapshot_name)
+        await self.setup_sandbox_workspace()
+        await self.setup_tools_and_mcp(None)
+
+        # Initialize ipybox CodeExecutor
+        await self._init_code_executor()
+
         logger.info("Sandbox setup complete", sandbox_id=self.sandbox_id)
 
-    async def reconnect(self, sandbox_id: str) -> None:
-        """Reconnect to a stopped sandbox.
+    async def _init_code_executor(self) -> None:
+        """Initialize the ipybox CodeExecutor."""
+        logger.info("Initializing ipybox CodeExecutor")
 
-        This is a fast path for session persistence - it starts a stopped
-        sandbox and skips all setup work (file uploads, tool modules, etc.)
-        since they're already present from the first session.
+        # Set up environment variables for the kernel
+        kernel_env = {
+            "PYTHONPATH": str(self._work_dir),
+        }
 
-        Args:
-            sandbox_id: The ID of an existing Daytona sandbox
-
-        Raises:
-            RuntimeError: If sandbox cannot be found or is in invalid state
-        """
-        logger.info("Reconnecting to stopped sandbox", sandbox_id=sandbox_id)
-
-        # Get the existing sandbox from Daytona with error handling
-        try:
-            self.sandbox = await self._daytona_call(
-                self.daytona_client.get,
-                sandbox_id,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-                allow_reconnect=False,
-            )
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to find sandbox {sandbox_id}. It may have been deleted. "
-                f"Original error: {e}"
-            ) from e
-
-        assert self.sandbox is not None
-        sandbox = self.sandbox
-        self.sandbox_id = sandbox_id
-
-        # Check sandbox state before attempting to start
-        state = getattr(sandbox, "state", None)
-        if state:
-            state_value = state.value if hasattr(state, "value") else str(state)
-            if state_value == "started":
-                logger.info("Sandbox already started, skipping start", sandbox_id=sandbox_id)
-            elif state_value in ("stopped", "starting"):
-                logger.info("Starting stopped sandbox", sandbox_id=sandbox_id, state=state_value)
-                await self._daytona_call(
-                    sandbox.start,
-                    timeout=60,
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                )
-            else:
-                raise RuntimeError(
-                    f"Cannot reconnect to sandbox in state: {state_value}. "
-                    f"Expected 'stopped' or 'started'."
-                )
-        else:
-            # No state attribute, assume we need to start
-            logger.info("Starting sandbox (state unknown)", sandbox_id=sandbox_id)
-            await self._daytona_call(
-                    sandbox.start,
-                    timeout=60,
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                )
-
-        # Get work directory reference
-        self._work_dir = await self._daytona_call(
-            sandbox.get_work_dir,
-            retry_policy=_DaytonaRetryPolicy.SAFE,
-        )
-        logger.info(f"Sandbox working directory: {self._work_dir}")
-
-        # SKIP: _setup_workspace() - directories already exist
-        # SKIP: _upload_mcp_server_files() - files already uploaded
-        # SKIP: _install_tool_modules() - tool modules already installed
-
-        # Initialize MCP server sessions (needed for tool execution)
-        self.mcp_server_sessions: dict[str, Any] = {}
-        await self._start_internal_mcp_servers()
-
-        logger.info(
-            "Sandbox started from stopped state",
-            sandbox_id=self.sandbox_id,
-        )
-
-    async def stop_sandbox(self) -> None:
-        """Stop the sandbox without deleting it.
-
-        Used for session persistence - stops the sandbox so it can be
-        restarted quickly on the next session, rather than deleting it.
-        """
-        if not self.sandbox:
-            return
-
-        # Check state before stopping to avoid errors when already stopped
-        try:
-            state = getattr(self.sandbox, "state", None)
-            if state:
-                state_value = state.value if hasattr(state, "value") else str(state)
-                if state_value == "stopped":
-                    logger.info("Sandbox already stopped", sandbox_id=self.sandbox_id)
-                    return
-        except Exception as e:
-            # If state check fails, log and continue with stop attempt
-            logger.debug("Could not check sandbox state", error=str(e))
-
-        try:
-            logger.info("Stopping sandbox", sandbox_id=self.sandbox_id)
-            await self._daytona_call(
-                self.sandbox.stop,
-                timeout=60,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-            logger.info("Sandbox stopped", sandbox_id=self.sandbox_id)
-        except Exception as e:
-            # Log warning but don't raise - sandbox may already be stopped or unavailable
-            logger.warning(
-                "Failed to stop sandbox",
-                sandbox_id=self.sandbox_id,
-                error=str(e),
-            )
-
-    async def _setup_workspace(self) -> None:
-        """Create workspace directory structure."""
-        logger.info("Setting up workspace structure")
-
-        # Get the working directory
-        assert self.sandbox is not None
-        work_dir = await self._daytona_call(
-            self.sandbox.get_work_dir,
-            retry_policy=_DaytonaRetryPolicy.SAFE,
-        )
-        logger.info(f"Sandbox working directory: {work_dir}")
-
-        # Store work_dir for use by other methods
-        self._work_dir = work_dir
-
-        # Use absolute paths to ensure directories are created correctly
-        directories = [
-            f"{work_dir}/tools",
-            f"{work_dir}/tools/docs",
-            f"{work_dir}/results",
-            f"{work_dir}/data",
-            f"{work_dir}/code",
-        ]
-
-        # Create all directories in parallel for faster setup
-        async def create_directory(directory: str) -> None:
-            try:
-                assert self.sandbox is not None
-                await self._daytona_call(
-                    self.sandbox.process.exec,
-                    f"mkdir -p {directory}",
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                )
-                logger.info(f"Created directory: {directory}")
-            except OSError as e:
-                logger.warning(f"Error creating directory {directory}: {e}")
-
-        await asyncio.gather(*[create_directory(d) for d in directories])
-
-    async def _upload_mcp_server_files(self) -> None:
-        """Upload custom Python MCP server files to sandbox.
-
-        For Python MCP servers configured with 'uv run python mcp_servers/xxx.py',
-        this method uploads the Python files to the sandbox so they can be executed
-        as subprocesses inside the sandbox environment.
-        """
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
-        mcp_servers_dir = f"{work_dir}/mcp_servers"
-
-        # Collect files to upload
-        files_to_upload = []
-
-        # Get config file directory
-        config_dir = getattr(self.config, "config_file_dir", None)
-
+        # Add environment variables from MCP server configs
         for server in self.config.mcp.servers:
             if not server.enabled:
                 continue
-            # Only handle Python MCP servers (uv run python ...)
-            if server.transport == "stdio" and server.command == "uv":
-                if len(server.args) >= 3 and server.args[0] == "run" and server.args[1] == "python":
-                    local_path = server.args[2]  # e.g., "mcp_servers/yfinance_mcp_server.py"
-
-                    # Resolve relative paths against config file directory first
-                    path_obj = Path(local_path)
-                    resolved_path = None
-
-                    if not path_obj.is_absolute() and config_dir:
-                        # Try resolving against config file directory
-                        config_relative_path = (config_dir / local_path).resolve()
-                        if config_relative_path.exists():
-                            resolved_path = str(config_relative_path)
-                            logger.debug(
-                                "Resolved MCP server path relative to config",
-                                server=server.name,
-                                original=local_path,
-                                resolved=resolved_path,
-                            )
-
-                    # Fall back to CWD-relative path
-                    if resolved_path is None and path_obj.exists():
-                        resolved_path = local_path
-
-                    if resolved_path:
-                        filename = Path(resolved_path).name
-                        sandbox_path = f"{mcp_servers_dir}/{filename}"
-                        files_to_upload.append((server.name, resolved_path, sandbox_path))
+            if hasattr(server, "env") and server.env:
+                for key, value in server.env.items():
+                    if value.startswith("${") and value.endswith("}"):
+                        var_name = value[2:-1]
+                        resolved_value = os.getenv(var_name)
+                        if resolved_value:
+                            kernel_env[key] = resolved_value
                     else:
-                        searched_paths = [local_path]
-                        if config_dir:
-                            searched_paths.append(str(config_dir / local_path))
-                        logger.warning(
-                            f"MCP server file not found: {local_path}",
-                            server=server.name,
-                            searched_paths=searched_paths,
-                        )
+                        kernel_env[key] = value
 
-        # If we have files to upload, create directory and upload in parallel
-        if files_to_upload:
-            assert self.sandbox is not None
-            await self._daytona_call(
-                self.sandbox.process.exec,
-                f"mkdir -p {mcp_servers_dir}",
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+        # Create CodeExecutor with images directory
+        self._code_executor = CodeExecutor(
+            kernel_env=kernel_env,
+            images_dir=self._results_dir,
+            log_level="WARNING",
+        )
+        await self._code_executor.start()
 
-            async def upload_file(server_name: str, local_path: str, sandbox_path: str) -> None:
-                # Read file from host using aiofiles to avoid blocking
-                async with aiofiles.open(local_path) as f:
-                    content = await f.read()
+        logger.info("ipybox CodeExecutor initialized")
 
-                # Upload to sandbox
-                assert self.sandbox is not None
-                await self._daytona_call(
-                    self.sandbox.fs.upload_file,
-                    content.encode("utf-8"),
-                    sandbox_path,
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
+    async def reconnect(self, sandbox_id: str) -> None:
+        """Reconnect to an existing sandbox.
+
+        For local execution, this simply reinitializes the code executor.
+
+        Args:
+            sandbox_id: The sandbox ID (used for verification)
+        """
+        logger.info("Reconnecting to sandbox", sandbox_id=sandbox_id)
+
+        self.sandbox_id = sandbox_id
+
+        # Ensure workspace directories exist
+        self._work_dir.mkdir(parents=True, exist_ok=True)
+        self._tools_dir.mkdir(parents=True, exist_ok=True)
+        self._results_dir.mkdir(parents=True, exist_ok=True)
+
+        # Reinitialize code executor
+        await self._init_code_executor()
+
+        # Initialize MCP server sessions
+        self.mcp_server_sessions = {}
+        await self._setup_mcp_server_sessions()
+
+        logger.info("Sandbox reconnected", sandbox_id=self.sandbox_id)
+
+    async def stop_sandbox(self) -> None:
+        """Stop the code executor.
+
+        Used for session persistence - stops the executor so it can be
+        restarted quickly on the next session.
+        """
+        if self._code_executor:
+            try:
+                await self._code_executor.stop()
+                logger.info("CodeExecutor stopped", sandbox_id=self.sandbox_id)
+            except Exception as e:
+                logger.warning(
+                    "Failed to stop CodeExecutor",
+                    sandbox_id=self.sandbox_id,
+                    error=str(e),
                 )
-
-                logger.info(
-                    "Uploaded MCP server file",
-                    server=server_name,
-                    local_path=local_path,
-                    sandbox_path=sandbox_path
-                )
-
-            # Upload all files in parallel
-            await asyncio.gather(*[
-                upload_file(server_name, local_path, sandbox_path)
-                for server_name, local_path, sandbox_path in files_to_upload
-            ])
+            self._code_executor = None
 
     SKILLS_MANIFEST_FILENAME = ".skills_manifest.json"
 
@@ -705,107 +291,6 @@ class PTCSandbox:
             Manifest dict with "version" and "files".
         """
         return await self._compute_skills_manifest(local_skill_roots)
-
-    def _is_transient_daytona_error(self, e: Exception) -> bool:
-        message = str(e).lower()
-        transient_markers = (
-            "remote end closed connection",
-            "remotedisconnected",
-            "connection aborted",
-            "connection reset",
-            "broken pipe",
-            "timed out",
-            "timeout",
-            "service unavailable",
-            "502",
-            "503",
-            "504",
-        )
-        return any(marker in message for marker in transient_markers)
-
-    async def _ensure_sandbox_connected(self) -> None:
-        if self.sandbox_id is None:
-            raise SandboxTransientError("Sandbox disconnected and no sandbox_id is available")
-
-        # Coalesce concurrent reconnect attempts.
-        async with self._reconnect_lock:
-            if self._reconnect_inflight is not None and not self._reconnect_inflight.done():
-                await self._reconnect_inflight
-                return
-
-            loop = asyncio.get_running_loop()
-            self._reconnect_inflight = loop.create_future()
-            inflight = self._reconnect_inflight
-
-            try:
-                await self.reconnect(self.sandbox_id)
-                inflight.set_result(None)
-            except Exception as e:
-                inflight.set_exception(e)
-                raise
-            finally:
-                self._reconnect_inflight = None
-
-    async def _daytona_call(
-        self,
-        func: Callable[..., Any],
-        *args: Any,
-        retry_policy: _DaytonaRetryPolicy,
-        allow_reconnect: bool = True,
-        retries: int = 5,
-        initial_delay_s: float = 0.25,
-        **kwargs: Any,
-    ) -> Any:
-        delay_s = initial_delay_s
-        reconnected = False
-
-        for attempt in range(1, retries + 1):
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                if not self._is_transient_daytona_error(e):
-                    raise
-
-                if allow_reconnect and not reconnected:
-                    try:
-                        await self._ensure_sandbox_connected()
-                        reconnected = True
-                    except Exception as reconnect_error:
-                        logger.debug(
-                            "Reconnect attempt failed during retry",
-                            error=str(reconnect_error),
-                        )
-
-                if retry_policy == _DaytonaRetryPolicy.UNSAFE:
-                    logger.warning(
-                        "Sandbox disconnected during unsafe operation; not retrying automatically",
-                        func=getattr(func, "__name__", str(func)),
-                        attempt=attempt,
-                        error=str(e),
-                    )
-                    message = (
-                        "Sandbox disconnected during command execution; sandbox reconnected. Please retry."
-                        if reconnected
-                        else "Sandbox disconnected during command execution; please retry after recovery."
-                    )
-                    raise SandboxTransientError(message) from e
-
-                if attempt == retries:
-                    raise SandboxTransientError(
-                        "Transient sandbox transport error; operation failed after retries"
-                    ) from e
-
-                logger.debug(
-                    "Retrying Daytona SDK call after transient error",
-                    func=getattr(func, "__name__", str(func)),
-                    attempt=attempt,
-                    error=str(e),
-                )
-                await asyncio.sleep(delay_s)
-                delay_s *= 2
-
-        raise SandboxTransientError("Transient sandbox transport error")
-
 
     async def _compute_skills_manifest(self, local_skill_roots: list[str]) -> dict[str, Any]:
         def build() -> dict[str, Any]:
@@ -824,8 +309,7 @@ class PTCSandbox:
                     if not (skill_dir / "SKILL.md").exists():
                         continue
 
-                    # Later sources override earlier ones; mirror the sandbox upload behavior
-                    # by clearing all files from the overridden skill directory.
+                    # Later sources override earlier ones
                     skill_name = skill_dir.name
                     if skill_name in seen_skill_names:
                         prefix = f"{skill_name}/"
@@ -877,16 +361,17 @@ class PTCSandbox:
             return False
 
         sandbox_base = local_skills_dirs[-1][1].rstrip("/")
-        manifest_path = f"{sandbox_base}/{self.SKILLS_MANIFEST_FILENAME}"
+        manifest_path = Path(f"{sandbox_base}/{self.SKILLS_MANIFEST_FILENAME}")
 
-        remote_manifest_text = await self.aread_file_text(manifest_path)
         remote_manifest: dict[str, Any] | None = None
-        if remote_manifest_text:
+        if manifest_path.exists():
             try:
-                parsed = json.loads(remote_manifest_text)
+                async with aiofiles.open(manifest_path) as f:
+                    content = await f.read()
+                parsed = json.loads(content)
                 if isinstance(parsed, dict):
                     remote_manifest = parsed
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, OSError):
                 remote_manifest = None
 
         remote_version = remote_manifest.get("version") if remote_manifest else None
@@ -902,7 +387,7 @@ class PTCSandbox:
         return False
 
     async def _upload_skills(self, local_skills_dirs: list[tuple[str, str]]) -> None:
-        """Upload skill files from local filesystem to sandbox.
+        """Upload skill files from local filesystem to sandbox directory.
 
         Skills are markdown-based instruction files that extend agent capabilities.
         Each skill is a directory containing a SKILL.md file with YAML frontmatter.
@@ -911,11 +396,7 @@ class PTCSandbox:
 
         Args:
             local_skills_dirs: List of (local_path, sandbox_path) tuples.
-                Example: [("~/.ptc-agent/skills", "/home/daytona/skills")]
         """
-        assert self.sandbox is not None
-        sandbox = self.sandbox
-
         local_roots = [local_dir for local_dir, _ in local_skills_dirs]
         manifest = await self._compute_skills_manifest(local_roots)
 
@@ -923,9 +404,8 @@ class PTCSandbox:
             logger.debug("No skills found; skipping upload")
             return
 
-        semaphore = asyncio.Semaphore(4)
-        upload_tasks: list[asyncio.Task[None]] = []
         uploaded_skill_names: set[str] = set()
+        total_skills_uploaded = 0
 
         async def list_skill_dirs(local_root: Path) -> list[Path]:
             def _list() -> list[Path]:
@@ -946,20 +426,6 @@ class PTCSandbox:
 
             return await asyncio.to_thread(_list)
 
-        async def upload_one(local_file: Path, sandbox_path: str) -> None:
-            async with semaphore:
-                async with aiofiles.open(str(local_file), "rb") as f:
-                    content = await f.read()
-
-                await self._daytona_call(
-                    sandbox.fs.upload_file,
-                    content,
-                    sandbox_path,
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                )
-
-        total_skills_uploaded = 0
-
         for local_dir, sandbox_dir in local_skills_dirs:
             local_path = Path(local_dir).expanduser()
             if not local_path.exists():
@@ -967,11 +433,8 @@ class PTCSandbox:
                 continue
 
             # Create sandbox skills directory
-            await self._daytona_call(
-                sandbox.process.exec,
-                f"mkdir -p {shlex.quote(sandbox_dir)}",
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            sandbox_path = Path(sandbox_dir)
+            sandbox_path.mkdir(parents=True, exist_ok=True)
 
             # Upload all skill directories
             for skill_dir in await list_skill_dirs(local_path):
@@ -979,159 +442,97 @@ class PTCSandbox:
                 if skill_name in ("", ".", ".."):
                     continue
 
-                sandbox_skill_dir = f"{sandbox_dir.rstrip('/')}/{skill_name}"
+                sandbox_skill_dir = sandbox_path / skill_name
 
-                # Later sources override earlier ones; delete the existing directory to avoid stale files.
+                # Later sources override earlier ones; delete the existing directory
                 if skill_name in uploaded_skill_names:
-                    await self._daytona_call(
-                        sandbox.process.exec,
-                        f"rm -rf {shlex.quote(sandbox_skill_dir)}",
-                        retry_policy=_DaytonaRetryPolicy.SAFE,
-                    )
+                    if sandbox_skill_dir.exists():
+                        await asyncio.to_thread(lambda p: p.rmtree() if hasattr(p, 'rmtree') else __import__('shutil').rmtree(p), sandbox_skill_dir)
 
-                await self._daytona_call(
-                    sandbox.process.exec,
-                    f"mkdir -p {shlex.quote(sandbox_skill_dir)}",
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                )
+                sandbox_skill_dir.mkdir(parents=True, exist_ok=True)
                 uploaded_skill_names.add(skill_name)
                 total_skills_uploaded += 1
 
                 for file_path in await list_skill_files(skill_dir):
-                    sandbox_file = f"{sandbox_skill_dir}/{file_path.name}"
-                    upload_tasks.append(asyncio.create_task(upload_one(file_path, sandbox_file)))
+                    sandbox_file = sandbox_skill_dir / file_path.name
+                    async with aiofiles.open(str(file_path), "rb") as f:
+                        content = await f.read()
+                    async with aiofiles.open(str(sandbox_file), "wb") as f:
+                        await f.write(content)
 
-        if upload_tasks:
-            await asyncio.gather(*upload_tasks)
-
-        # Persist manifest in sandbox for cheap change detection on sandbox reuse.
-        manifest_dir = local_skills_dirs[-1][1].rstrip("/")
-        manifest_path = f"{manifest_dir}/{self.SKILLS_MANIFEST_FILENAME}"
-        manifest_bytes = json.dumps(manifest, sort_keys=True).encode("utf-8")
-        await self._daytona_call(
-            sandbox.fs.upload_file,
-            manifest_bytes,
-            manifest_path,
-            retry_policy=_DaytonaRetryPolicy.SAFE,
-        )
+        # Persist manifest
+        manifest_dir = Path(local_skills_dirs[-1][1].rstrip("/"))
+        manifest_path = manifest_dir / self.SKILLS_MANIFEST_FILENAME
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(str(manifest_path), "w") as f:
+            await f.write(json.dumps(manifest, sort_keys=True))
 
         logger.info(
             "Uploaded skills to sandbox",
             skill_count=total_skills_uploaded,
             file_count=len(manifest.get("files", {})),
-            manifest_path=manifest_path,
+            manifest_path=str(manifest_path),
         )
-
-    async def _install_dependencies(self) -> None:
-        """Install required Python packages in sandbox."""
-        logger.info("Installing dependencies")
-
-        dependencies = [
-            "mcp",
-            "pandas",
-            "requests",
-            "aiohttp",
-        ]
-
-        install_cmd = f"uv pip install -q {' '.join(dependencies)}"
-
-        try:
-            assert self.sandbox is not None
-            _result = await self._daytona_call(
-                self.sandbox.process.exec,
-                install_cmd,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-            logger.info("Dependencies installed")
-        except OSError as e:
-            logger.error(f"Failed to install dependencies: {e}")
-            raise
 
     async def _install_tool_modules(self) -> None:
         """Generate and install tool modules from MCP servers."""
         logger.info("Installing tool modules")
 
-        # Get work directory (set by _setup_workspace)
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
-
-        # Collect all files to upload (content generation is CPU-bound, fast)
-        uploads: list[tuple[bytes, str, tuple[str, dict[str, str]] | None]] = []
+        # Ensure tools directory exists
+        self._tools_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. MCP client module
         mcp_client_code = self.tool_generator.generate_mcp_client_code(
             self.config.mcp.servers
         )
-        mcp_client_path = f"{work_dir}/tools/mcp_client.py"
-        uploads.append((
-            mcp_client_code.encode("utf-8"),
-            mcp_client_path,
-            ("MCP client module installed", {"path": mcp_client_path})
-        ))
+        mcp_client_path = self._tools_dir / "mcp_client.py"
+        async with aiofiles.open(str(mcp_client_path), "w") as f:
+            await f.write(mcp_client_code)
+
+        logger.info("MCP client module installed", path=str(mcp_client_path))
 
         # 2. Tool modules and documentation
-        assert self.mcp_registry is not None
-        tools_by_server = self.mcp_registry.get_all_tools()
+        if self.mcp_registry:
+            tools_by_server = self.mcp_registry.get_all_tools()
 
-        # Create per-server doc directories
-        assert self.sandbox is not None
-        for server_name in tools_by_server:
-            doc_dir = f"{work_dir}/tools/docs/{server_name}"
-            await self._daytona_call(
-                self.sandbox.process.exec,
-                f"mkdir -p {doc_dir}",
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            for server_name, tools in tools_by_server.items():
+                # Generate Python module
+                module_code = self.tool_generator.generate_tool_module(
+                    server_name, tools
+                )
+                module_path = self._tools_dir / f"{server_name}.py"
+                async with aiofiles.open(str(module_path), "w") as f:
+                    await f.write(module_code)
 
-        for server_name, tools in tools_by_server.items():
-            # Generate Python module
-            module_code = self.tool_generator.generate_tool_module(
-                server_name, tools
-            )
-            module_path = f"{work_dir}/tools/{server_name}.py"
-            uploads.append((
-                module_code.encode("utf-8"),
-                module_path,
-                ("Tool module installed", {"server": server_name, "path": module_path, "tool_count": str(len(tools))})
-            ))
+                logger.info(
+                    "Tool module installed",
+                    server=server_name,
+                    path=str(module_path),
+                    tool_count=len(tools),
+                )
 
-            # Generate documentation for each tool
-            for tool in tools:
-                doc = self.tool_generator.generate_tool_documentation(tool)
-                doc_path = f"{work_dir}/tools/docs/{server_name}/{tool.name}.md"
-                upload_item: tuple[bytes, str, tuple[str, dict[str, str]] | None] = (doc.encode("utf-8"), doc_path, None)
-                uploads.append(upload_item)
+                # Generate documentation for each tool
+                doc_dir = self._tools_dir / "docs" / server_name
+                doc_dir.mkdir(parents=True, exist_ok=True)
+
+                for tool in tools:
+                    doc = self.tool_generator.generate_tool_documentation(tool)
+                    doc_path = doc_dir / f"{tool.name}.md"
+                    async with aiofiles.open(str(doc_path), "w") as f:
+                        await f.write(doc)
 
         # 3. __init__.py for tools package
         init_content = '"""Auto-generated tool modules from MCP servers."""\n'
-        init_path = f"{work_dir}/tools/__init__.py"
-        init_item: tuple[bytes, str, tuple[str, dict[str, str]] | None] = (init_content.encode("utf-8"), init_path, None)
-        uploads.append(init_item)
-
-        # Upload all files in parallel
-        async def upload_file(content_bytes: bytes, path: str, log_info: tuple[str, dict[str, str]] | None) -> None:
-            assert self.sandbox is not None
-            await self._daytona_call(
-                self.sandbox.fs.upload_file,
-                content_bytes,
-                path,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-            if log_info:
-                msg, kwargs = log_info
-                logger.info(msg, **kwargs)
-
-        await asyncio.gather(*[
-            upload_file(content, path, log_info)
-            for content, path, log_info in uploads
-        ])
+        init_path = self._tools_dir / "__init__.py"
+        async with aiofiles.open(str(init_path), "w") as f:
+            await f.write(init_content)
 
         logger.info("Tool modules installation complete")
 
-    async def _start_internal_mcp_servers(self) -> None:
-        """Start MCP servers as background processes inside sandbox."""
-        logger.info("Starting internal MCP servers")
+    async def _setup_mcp_server_sessions(self) -> None:
+        """Setup MCP server session configurations."""
+        logger.info("Setting up MCP server sessions")
 
-        # Track server sessions for lifecycle management
         self.mcp_server_sessions = {}
 
         for server in self.config.mcp.servers:
@@ -1144,58 +545,42 @@ class PTCSandbox:
                 )
                 continue
 
-            try:
-                # Build the command to start the MCP server
-                if server.command == "npx":
-                    # npx -y package-name [args...]
-                    cmd_parts = [server.command, *server.args]
-                    cmd = " ".join(cmd_parts)
-                else:
-                    # Custom command
-                    cmd = f"{server.command} {' '.join(server.args)}"
+            # Build the command to start the MCP server
+            if server.command == "npx":
+                cmd_parts = [server.command, *server.args]
+                cmd = " ".join(cmd_parts)
+            else:
+                cmd = f"{server.command} {' '.join(server.args)}"
 
-                # Add environment variables if specified
-                env_vars = []
-                if hasattr(server, "env") and server.env:
-                    for key, value in server.env.items():
-                        # Environment variables might have ${VAR} syntax, resolve them
-                        # For now, we'll pass them as-is and they'll need to be set in sandbox
-                        env_vars.append(f"{key}={value}")
+            # Add environment variables if specified
+            env_vars = {}
+            if hasattr(server, "env") and server.env:
+                for key, value in server.env.items():
+                    if value.startswith("${") and value.endswith("}"):
+                        var_name = value[2:-1]
+                        resolved_value = os.getenv(var_name)
+                        if resolved_value:
+                            env_vars[key] = resolved_value
+                    else:
+                        env_vars[key] = value
 
-                # Create PTY session for the MCP server
-                session_name = f"mcp-{server.name}"
+            session_name = f"mcp-{server.name}"
 
-                logger.info(
-                    "Creating MCP server session",
-                    server=server.name,
-                    session=session_name,
-                    command=cmd
-                )
+            self.mcp_server_sessions[server.name] = {
+                "session_name": session_name,
+                "command": cmd,
+                "env": env_vars,
+                "started": False
+            }
 
-                # Create session (but don't start the server yet, we'll do that when needed)
-                # For now, just track that this server should be available
-                self.mcp_server_sessions[server.name] = {
-                    "session_name": session_name,
-                    "command": cmd,
-                    "env": env_vars,
-                    "started": False
-                }
-
-                logger.info(
-                    "MCP server session configured",
-                    server=server.name,
-                    session=session_name
-                )
-
-            except OSError as e:
-                logger.error(
-                    "Failed to configure MCP server session",
-                    server=server.name,
-                    error=str(e)
-                )
+            logger.info(
+                "MCP server session configured",
+                server=server.name,
+                session=session_name
+            )
 
         logger.info(
-            "Internal MCP server configuration complete",
+            "MCP server configuration complete",
             servers=list(self.mcp_server_sessions.keys())
         )
 
@@ -1218,8 +603,7 @@ class PTCSandbox:
         for pattern in patterns:
             matches.extend(re.findall(pattern, stderr))
 
-        # Handle submodule imports (e.g., "foo.bar" -> "foo")
-        # Also deduplicate
+        # Handle submodule imports and deduplicate
         base_packages = list({m.split(".")[0] for m in matches})
 
         if base_packages:
@@ -1231,7 +615,7 @@ class PTCSandbox:
         return base_packages
 
     async def _install_package(self, package: str) -> bool:
-        """Install a Python package in the sandbox.
+        """Install a Python package locally.
 
         Args:
             package: Package name to install
@@ -1241,26 +625,24 @@ class PTCSandbox:
         """
         try:
             logger.info(f"Auto-installing missing package: {package}")
-            assert self.sandbox is not None
-            result = await self._daytona_call(
-                self.sandbox.process.exec,
-                f"uv pip install -q {package}",
-                retry_policy=_DaytonaRetryPolicy.SAFE,
+            result = subprocess.run(
+                ["uv", "pip", "install", "-q", package],
+                capture_output=True,
+                text=True,
             )
-            exit_code = getattr(result, "exit_code", 1)
-            if exit_code == 0:
+            if result.returncode == 0:
                 logger.info(f"Successfully installed package: {package}")
                 return True
-            logger.warning(f"Failed to install package: {package}, exit_code={exit_code}")
+            logger.warning(f"Failed to install package: {package}, exit_code={result.returncode}")
             return False
-        except OSError as e:
+        except Exception as e:
             logger.warning(f"Failed to install {package}: {e}")
             return False
 
     async def execute(
         self, code: str, timeout: int | None = None, *, auto_install: bool = True, max_retries: int = 2
     ) -> ExecutionResult:
-        """Execute Python code in the sandbox with optional auto-install for missing dependencies.
+        """Execute Python code in the ipybox kernel with optional auto-install for missing dependencies.
 
         Args:
             code: Python code to execute
@@ -1271,8 +653,8 @@ class PTCSandbox:
         Returns:
             ExecutionResult with execution details
         """
-        if not self.sandbox:
-            raise RuntimeError("Sandbox not initialized. Call setup() first.")
+        if not self._code_executor:
+            raise RuntimeError("CodeExecutor not initialized. Call setup() first.")
 
         self.execution_count += 1
         execution_id = f"exec_{self.execution_count:04d}"
@@ -1289,99 +671,53 @@ class PTCSandbox:
         start_time = time.time()
 
         try:
-            # Write code to file
-            code_path = f"code/{execution_id}.py"
-            await self._daytona_call(
-                self.sandbox.fs.upload_file,
-                code.encode("utf-8"),
-                code_path,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-
             # Get list of files before execution
             files_before = await self._list_result_files()
 
-            # Execute code
+            # Execute code using ipybox
             timeout_val = timeout or self.config.security.max_execution_time
 
-            # Set PYTHONPATH to working directory so code can import from tools/
-            # Also pass MCP server environment variables
-            work_dir = await self._daytona_call(
-                self.sandbox.get_work_dir,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            try:
+                result = await self._code_executor.execute(code, timeout=timeout_val)
 
-            exec_env = {"PYTHONPATH": work_dir}
-
-            # Add environment variables from MCP server configs (only enabled servers)
-            import os
-            for server in self.config.mcp.servers:
-                if not server.enabled:
-                    continue
-                if hasattr(server, "env") and server.env:
-                    for key, value in server.env.items():
-                        # Resolve ${VAR} placeholders from host environment
-                        if value.startswith("${") and value.endswith("}"):
-                            var_name = value[2:-1]
-                            resolved_value = os.getenv(var_name)
-                            if resolved_value:
-                                exec_env[key] = resolved_value
-                        else:
-                            exec_env[key] = value
-
-            # Use code_run() for native artifact support (captures matplotlib charts)
-            from daytona_sdk.common.process import CodeRunParams
-
-            result = await self._daytona_call(
-                self.sandbox.process.code_run,
-                code,
-                params=CodeRunParams(env=exec_env),
-                timeout=timeout_val,
-                retry_policy=_DaytonaRetryPolicy.UNSAFE,
-            )
-
-            # Get stdout/stderr and exit code from Daytona ExecuteResponse
-            # The result object has: exit_code, result (stdout), artifacts
-            if hasattr(result, "result"):
-                # Daytona SDK ExecuteResponse.result contains the stdout
-                stdout = result.result or ""
-            elif hasattr(result, "stdout"):
-                stdout = result.stdout or ""
-            else:
-                stdout = ""
-
-            # Get stderr - check multiple possible locations
-            if hasattr(result, "stderr"):
-                stderr = result.stderr or ""
-            elif hasattr(result, "artifacts") and hasattr(result.artifacts, "stderr"):
-                stderr = result.artifacts.stderr or ""
-            else:
+                stdout = result.text or ""
                 stderr = ""
+                success = True
 
-            exit_code = getattr(result, "exit_code", 1)
-
-            # Determine success based on exit code
-            success = (exit_code == 0)
-
-            # Extract charts from artifacts (matplotlib captures)
-            charts = []
-            if hasattr(result, "artifacts") and result.artifacts and hasattr(result.artifacts, "charts") and result.artifacts.charts:
-                for chart in result.artifacts.charts:
-                    chart_type = chart.type.value if hasattr(chart.type, "value") else str(chart.type)
+                # Handle images from execution
+                charts = []
+                for img_path in result.images:
+                    # Read image and convert to base64
+                    async with aiofiles.open(str(img_path), "rb") as f:
+                        img_data = await f.read()
+                    import base64
                     charts.append(ChartData(
-                        type=chart_type,
-                        title=chart.title if hasattr(chart, "title") else "",
-                        png_base64=chart.png if hasattr(chart, "png") else None,
-                        elements=chart.elements if hasattr(chart, "elements") else []
+                        type="image",
+                        title=img_path.name,
+                        png_base64=base64.b64encode(img_data).decode(),
                     ))
-                logger.info(f"Captured {len(charts)} chart(s) from artifacts")
+
+                if charts:
+                    logger.info(f"Captured {len(charts)} image(s) from execution")
+
+            except CodeExecutionError as e:
+                stdout = ""
+                stderr = str(e)
+                success = False
+                charts = []
+
+            except asyncio.TimeoutError:
+                stdout = ""
+                stderr = f"Code execution timed out after {timeout_val} seconds"
+                success = False
+                charts = []
 
             # Get files after execution
             files_after = await self._list_result_files()
 
             # Determine file changes
             files_created = [f for f in files_after if f not in files_before]
-            files_modified: list[str] = []  # TODO: Implement modification tracking
+            files_modified: list[str] = []
 
             duration = time.time() - start_time
 
@@ -1411,6 +747,9 @@ class PTCSandbox:
                     # Install missing packages
                     for package in missing_packages:
                         await self._install_package(package)
+
+                    # Reset the code executor to pick up new packages
+                    await self._code_executor.reset()
 
                     # Retry execution with decremented retry count
                     return await self.execute(
@@ -1454,13 +793,13 @@ class PTCSandbox:
             )
 
     async def execute_bash_command(
-        self, command: str, working_dir: str = "/home/daytona", timeout: int = 60, *, background: bool = False
+        self, command: str, working_dir: str | None = None, timeout: int = 60, *, background: bool = False
     ) -> dict[str, Any]:
-        """Execute a bash command in the sandbox.
+        """Execute a bash command locally.
 
         Args:
             command: Bash command to execute
-            working_dir: Working directory for command execution (default: /home/daytona)
+            working_dir: Working directory for command execution (default: workspace directory)
             timeout: Maximum execution time in seconds (default: 60)
             background: Run command in background (not fully implemented yet)
 
@@ -1475,99 +814,67 @@ class PTCSandbox:
             from datetime import UTC, datetime
             timestamp = datetime.now(tz=UTC).isoformat()
 
+            work_dir = working_dir or str(self._work_dir)
+
             logger.info(
                 "Executing bash command",
                 bash_id=bash_id,
                 command_hash=command_hash,
                 command=command[:100],
-                working_dir=working_dir,
+                working_dir=work_dir,
             )
-
-            # Build the full bash command with working directory
-            # Use cd to change directory, then execute command
-            full_command = f"cd {working_dir} && {command}"
 
             # Create a shell script with metadata header for logging
             script_content = textwrap.dedent(f"""\
                 #!/bin/bash
                 # Bash Execution Log
                 # ID: {bash_id}
-                # Working Directory: {working_dir}
+                # Working Directory: {work_dir}
                 # Timestamp: {timestamp}
                 # Command Hash: {command_hash}
 
-                set -e  # Exit on error (optional, can be removed for more lenient execution)
-                {full_command}
+                set -e  # Exit on error
+                {command}
             """)
 
-            # Write script to code/ directory for persistent logging
-            # Use relative path for upload (Daytona SDK handles it relative to work_dir)
-            script_relative_path = f"code/{bash_id}.sh"
-            assert self.sandbox is not None
-            await self._daytona_call(
-                self.sandbox.fs.upload_file,
-                script_content.encode("utf-8"),
-                script_relative_path,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            # Write script to code/ directory
+            self._code_dir.mkdir(parents=True, exist_ok=True)
+            script_path = self._code_dir / f"{bash_id}.sh"
+            async with aiofiles.open(str(script_path), "w") as f:
+                await f.write(script_content)
 
-            # Get work directory for absolute path in bash execution
-            work_dir_path = getattr(self, "_work_dir", "/home/daytona")
-            script_absolute_path = f"{work_dir_path}/{script_relative_path}"
+            # Execute the script
+            try:
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["bash", str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=work_dir,
+                )
 
-            # Execute the script using the sandbox's execution method
-            # Since Daytona SDK uses process.execute, we'll use Python to run bash
-            python_wrapper = textwrap.dedent(f"""\
-                import subprocess
-                import sys
-
-                try:
-                    result = subprocess.run(
-                        ['bash', '{script_absolute_path}'],
-                        capture_output=True,
-                        text=True,
-                        timeout={timeout}
-                    )
-                    print(result.stdout, end='')  # noqa: T201
-                    sys.stderr.write(result.stderr)
-                    sys.exit(result.returncode)
-                except subprocess.TimeoutExpired:
-                    sys.stderr.write(f"Command timed out after {timeout} seconds")
-                    sys.exit(124)
-                except (OSError, subprocess.SubprocessError) as e:
-                    sys.stderr.write(f"Error executing command: {{e}}")
-                    sys.exit(1)
-            """)
-
-            # Execute via Python wrapper
-            result = await self.execute(python_wrapper)
-
-            # Parse the result
-            if result.success:
                 return {
-                    "success": True,
+                    "success": result.returncode == 0,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
-                    "exit_code": 0,
+                    "exit_code": result.returncode,
                     "bash_id": bash_id,
                     "command_hash": command_hash,
                 }
-            # Extract exit code from stderr if possible
-            exit_code = 1
-            stderr = result.stderr if result.stderr else result.stdout
 
-            return {
-                "success": False,
-                "stdout": result.stdout,
-                "stderr": stderr,
-                "exit_code": exit_code,
-                "bash_id": bash_id,
-                "command_hash": command_hash,
-            }
+            except subprocess.TimeoutExpired:
+                return {
+                    "success": False,
+                    "stdout": "",
+                    "stderr": f"Command timed out after {timeout} seconds",
+                    "exit_code": 124,
+                    "bash_id": bash_id,
+                    "command_hash": command_hash,
+                }
 
         except Exception as e:
             logger.error(f"Failed to execute bash command: {e}", exc_info=True)
-            # Note: bash_id may not be defined if error occurs early
             return {
                 "success": False,
                 "stdout": "",
@@ -1584,46 +891,35 @@ class PTCSandbox:
             List of file paths relative to workspace (e.g., "results/file.csv")
         """
         try:
-            assert self.sandbox is not None
-            file_infos = await self._daytona_call(
-                self.sandbox.fs.list_files,
-                "results",
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-            if not file_infos:
+            if not self._results_dir.exists():
                 return []
-            # Return paths relative to workspace, not just filenames
-            return [f"results/{str(f.name) if hasattr(f, 'name') else str(f)}" for f in file_infos]
-        except (OSError, AttributeError) as e:
+            files = []
+            for entry in self._results_dir.iterdir():
+                if entry.is_file():
+                    files.append(f"results/{entry.name}")
+            return files
+        except Exception as e:
             logger.warning(f"Error listing result files: {e}")
             return []
 
     async def adownload_file_bytes(self, filepath: str) -> bytes | None:
-        """Download raw bytes from sandbox.
-
-        This path is safe to retry automatically.
+        """Download raw bytes from local file.
 
         Returns:
             Bytes if downloaded, or None if missing.
-
-        Raises:
-            SandboxTransientError: If a transient sandbox transport error persists.
         """
         try:
-            assert self.sandbox is not None
-            return await self._daytona_call(
-                self.sandbox.fs.download_file,
-                filepath,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-        except SandboxTransientError:
-            raise
+            path = self._resolve_path(filepath)
+            if not path.exists():
+                return None
+            async with aiofiles.open(str(path), "rb") as f:
+                return await f.read()
         except Exception as e:
             logger.debug("Failed to download file bytes", filepath=filepath, error=str(e))
             return None
 
     async def aread_file_text(self, filepath: str) -> str | None:
-        """Read a UTF-8 text file from the sandbox.
+        """Read a UTF-8 text file from the local filesystem.
 
         This path is safe to retry automatically.
         """
@@ -1637,34 +933,26 @@ class PTCSandbox:
             return None
 
     async def aupload_file_bytes(self, filepath: str, content: bytes) -> bool:
-        """Upload raw bytes to the sandbox.
+        """Upload raw bytes to the local filesystem.
 
         This path is safe to retry automatically because uploads overwrite the target.
-
-        Raises:
-            SandboxTransientError: If a transient sandbox transport error persists.
         """
         if self.config.filesystem.enable_path_validation and not self.validate_path(filepath):
             logger.error(f"Access denied: {filepath} is not in allowed directories")
             return False
 
         try:
-            assert self.sandbox is not None
-            await self._daytona_call(
-                self.sandbox.fs.upload_file,
-                content,
-                filepath,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            path = self._resolve_path(filepath)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(str(path), "wb") as f:
+                await f.write(content)
             return True
-        except SandboxTransientError:
-            raise
         except Exception as e:
             logger.debug("Failed to upload file bytes", filepath=filepath, error=str(e))
             return False
 
     async def awrite_file_text(self, filepath: str, content: str) -> bool:
-        """Write UTF-8 text to a sandbox file (overwrites).
+        """Write UTF-8 text to a local file (overwrites).
 
         This path is safe to retry automatically.
         """
@@ -1691,10 +979,31 @@ class PTCSandbox:
         end = start + limit
         return "\n".join(lines[start:end])
 
-    def normalize_path(self, path: str) -> str:
-        """Normalize virtual path to absolute sandbox path (input normalization).
+    def _resolve_path(self, filepath: str) -> Path:
+        """Resolve a virtual or relative path to an absolute local path.
 
-        Converts agent's virtual paths to real sandbox paths:
+        Args:
+            filepath: Virtual, relative, or absolute path
+
+        Returns:
+            Resolved absolute Path object
+        """
+        # Handle absolute paths
+        if filepath.startswith("/"):
+            # Check if it's a virtual path within workspace
+            work_dir_str = str(self._work_dir)
+            if filepath.startswith(work_dir_str):
+                return Path(filepath)
+            # Virtual path: /foo -> workspace/foo
+            return self._work_dir / filepath.lstrip("/")
+
+        # Relative path
+        return self._work_dir / filepath
+
+    def normalize_path(self, path: str) -> str:
+        """Normalize virtual path to absolute local path (input normalization).
+
+        Converts agent's virtual paths to real local paths:
             "/" or "." or "" -> {working_directory}
             "/results/file.txt" -> {working_directory}/results/file.txt
             "data/file.txt" -> {working_directory}/data/file.txt
@@ -1705,9 +1014,8 @@ class PTCSandbox:
             path: Virtual or relative path from agent
 
         Returns:
-            Absolute sandbox path
+            Absolute local path
         """
-        # Use configured working_directory as the prefix for path normalization
         work_dir = self.config.filesystem.working_directory
 
         if path in (None, "", ".", "/"):
@@ -1715,7 +1023,7 @@ class PTCSandbox:
 
         path = path.strip()
 
-        # Already in allowed directories - keep as is (just normalize . and ..)
+        # Already in allowed directories - keep as is
         for allowed_dir in self.config.filesystem.allowed_directories:
             if path.startswith(allowed_dir):
                 return str(Path(path))
@@ -1728,7 +1036,7 @@ class PTCSandbox:
         return str(Path(f"{work_dir}/{path}"))
 
     def virtualize_path(self, path: str) -> str:
-        """Convert real sandbox path to virtual path (output normalization).
+        """Convert real local path to virtual path (output normalization).
 
         Strips working_directory prefix from paths returned to agent:
             {working_directory}/results/file.txt -> /results/file.txt
@@ -1736,12 +1044,11 @@ class PTCSandbox:
             /tmp/file.txt -> /tmp/file.txt (unchanged)
 
         Args:
-            path: Absolute sandbox path
+            path: Absolute local path
 
         Returns:
             Virtual path for agent consumption
         """
-        # Use configured working_directory as the prefix to strip
         work_dir = self.config.filesystem.working_directory
 
         if path.startswith(work_dir + "/"):
@@ -1763,12 +1070,11 @@ class PTCSandbox:
         if not self.config.filesystem.enable_path_validation:
             return True
 
-        # Normalize the path first (handles virtual paths like /results/...)
+        # Normalize the path first
         normalized_path = self.normalize_path(filepath)
 
         # Check against allowed directories
         for allowed_dir in self.config.filesystem.allowed_directories:
-            # Exact match or path within allowed directory
             if normalized_path == allowed_dir or normalized_path.startswith(allowed_dir + "/"):
                 return True
 
@@ -1806,39 +1112,32 @@ class PTCSandbox:
                 logger.error(f"Access denied: {directory} is not in allowed directories")
                 return []
 
-            assert self.sandbox is not None
-            file_infos = await self._daytona_call(
-                self.sandbox.fs.list_files,
-                directory,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-            if not file_infos:
+            path = self._resolve_path(directory)
+            if not path.exists():
                 return []
 
             results: list[dict[str, Any]] = []
-            for entry in file_infos:
-                name = str(entry.name) if hasattr(entry, "name") else str(entry)
-                is_dir = bool(getattr(entry, "is_dir", False))
-                entry_path = f"{directory}/{name}" if directory != "." else name
-                results.append({"name": name, "path": entry_path, "is_dir": is_dir})
+            for entry in path.iterdir():
+                entry_path = f"{directory}/{entry.name}" if directory != "." else entry.name
+                results.append({
+                    "name": entry.name,
+                    "path": entry_path,
+                    "is_dir": entry.is_dir(),
+                })
             return results
         except Exception as e:
             logger.debug("Error listing directory", directory=directory, error=str(e))
             return []
 
     async def acreate_directory(self, dirpath: str) -> bool:
-        """Create a directory in the sandbox."""
+        """Create a directory in the local filesystem."""
         try:
             if self.config.filesystem.enable_path_validation and not self.validate_path(dirpath):
                 logger.error(f"Access denied: {dirpath} is not in allowed directories")
                 return False
 
-            assert self.sandbox is not None
-            await self._daytona_call(
-                self.sandbox.process.exec,
-                f"mkdir -p {shlex.quote(dirpath)}",
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            path = self._resolve_path(dirpath)
+            path.mkdir(parents=True, exist_ok=True)
             return True
         except Exception as e:
             logger.debug("Failed to create directory", dirpath=dirpath, error=str(e))
@@ -1906,47 +1205,25 @@ class PTCSandbox:
                 logger.error(f"Access denied: {path} is not in allowed directories")
                 return []
 
-            search_path = self._normalize_search_path(path)
+            search_path = self._resolve_path(path)
 
             if "**" not in pattern and "/" not in pattern:
                 pattern = f"**/{pattern}"
 
-            glob_code = textwrap.dedent(f"""\
-                import glob
-                import os
-
-                pattern = {pattern!r}
-                search_path = {search_path!r}
-
-                full_pattern = os.path.join(search_path, pattern)
-                matches = glob.glob(full_pattern, recursive=True)
-                files = [f for f in matches if os.path.isfile(f)]
-
+            def _glob() -> list[str]:
+                full_pattern = str(search_path / pattern)
+                matches = Path(search_path).glob(pattern.replace("**", "**"))
+                files = [str(f) for f in matches if f.is_file()]
+                # Sort by modification time
                 try:
-                    files_with_mtime = [(f, os.path.getmtime(f)) for f in files]
-                    sorted_files = sorted(files_with_mtime, key=lambda x: x[1], reverse=True)
-                    for f, _ in sorted_files:
-                        print(f)  # noqa: T201
+                    files_with_mtime = [(f, Path(f).stat().st_mtime) for f in files]
+                    files_with_mtime.sort(key=lambda x: x[1], reverse=True)
+                    return [f for f, _ in files_with_mtime]
                 except OSError:
-                    for f in files:
-                        print(f)  # noqa: T201
-            """)
+                    return files
 
-            encoded_code = base64.b64encode(glob_code.encode()).decode()
-            cmd = f'python3 -c "import base64; exec(base64.b64decode(\'{encoded_code}\').decode())"'
-
-            assert self.sandbox is not None
-            result = await self._daytona_call(
-                self.sandbox.process.exec,
-                cmd,
-                timeout=30,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
-
-            output = result.result.strip() if getattr(result, "result", None) else ""
-            if not output:
-                return []
-            return output.split("\n")
+            results = await asyncio.to_thread(_glob)
+            return results
 
         except Exception as e:
             logger.debug("Async glob failed", pattern=pattern, path=path, error=str(e))
@@ -1974,6 +1251,8 @@ class PTCSandbox:
             if self.config.filesystem.enable_path_validation and not self.validate_path(path):
                 logger.error(f"Access denied: {path} is not in allowed directories")
                 return []
+
+            search_path = self._resolve_path(path)
 
             cmd = ["rg"]
             if output_mode == "files_with_matches":
@@ -2003,19 +1282,15 @@ class PTCSandbox:
                 cmd.extend(["--type", type])
 
             cmd.append(pattern)
-            search_path = self._normalize_search_path(path)
-            cmd.append(search_path)
+            cmd.append(str(search_path))
 
-            cmd_str = " ".join(f'"{c}"' if " " in c else c for c in cmd)
-            assert self.sandbox is not None
-            result = await self._daytona_call(
-                self.sandbox.process.exec,
-                cmd_str,
-                timeout=60,
-                retry_policy=_DaytonaRetryPolicy.SAFE,
-            )
+            def _run_grep() -> str:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                return result.stdout
 
-            output = result.result.strip() if getattr(result, "result", None) else ""
+            output = await asyncio.to_thread(_run_grep)
+            output = output.strip()
+
             if not output:
                 return []
 
@@ -2050,26 +1325,18 @@ class PTCSandbox:
             return []
 
     async def cleanup(self) -> None:
-        """Clean up and destroy the sandbox."""
+        """Clean up and stop the code executor."""
         logger.info("Cleaning up sandbox", sandbox_id=self.sandbox_id)
 
-        if self.sandbox:
+        if self._code_executor:
             try:
-                await self._daytona_call(
-                    self.sandbox.delete,
-                    retry_policy=_DaytonaRetryPolicy.SAFE,
-                )
-                logger.info("Sandbox deleted", sandbox_id=self.sandbox_id)
-            except OSError as e:
-                logger.error(f"Error deleting sandbox: {e}")
+                await self._code_executor.stop()
+                logger.info("CodeExecutor stopped", sandbox_id=self.sandbox_id)
+            except Exception as e:
+                logger.error(f"Error stopping CodeExecutor: {e}")
+            self._code_executor = None
 
-        self.sandbox = None
         self.sandbox_id = None
-
-        try:
-            await self.daytona_client.close()
-        except Exception as e:
-            logger.debug("Failed to close Daytona client", error=str(e))
 
     async def __aenter__(self) -> "PTCSandbox":
         """Async context manager entry."""

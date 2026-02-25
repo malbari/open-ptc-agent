@@ -1,10 +1,10 @@
-"""Tests for DaytonaBackend."""
+"""Tests for LocalBackend."""
 
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from ptc_agent.agent.backends.daytona import DaytonaBackend
+from ptc_agent.agent.backends.local import LocalBackend
 
 
 @pytest.fixture
@@ -18,8 +18,8 @@ def mock_sandbox():
 
 
 @pytest.mark.asyncio
-class TestDaytonaBackendGrepRaw:
-    """Tests for DaytonaBackend.agrep_raw() output parsing."""
+class TestLocalBackendGrepRaw:
+    """Tests for LocalBackend.agrep_raw() output parsing."""
 
     async def test_grep_raw_with_string_list_result(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(
@@ -29,7 +29,7 @@ class TestDaytonaBackendGrepRaw:
             ]
         )
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("def ", "/")
         assert isinstance(result, list)
 
@@ -44,7 +44,7 @@ class TestDaytonaBackendGrepRaw:
     async def test_grep_raw_with_string_result(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(return_value="/home/daytona/file.py:5:match line")
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("match", "/")
         assert isinstance(result, list)
 
@@ -56,7 +56,7 @@ class TestDaytonaBackendGrepRaw:
     async def test_grep_raw_with_dict_list_result(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(return_value=[{"path": "/home/daytona/file.py", "line": 10, "text": "match"}])
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("match", "/")
         assert isinstance(result, list)
 
@@ -68,7 +68,7 @@ class TestDaytonaBackendGrepRaw:
     async def test_grep_raw_with_empty_result(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(return_value=[])
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("nomatch", "/")
         assert isinstance(result, list)
 
@@ -77,7 +77,7 @@ class TestDaytonaBackendGrepRaw:
     async def test_grep_raw_with_invalid_line_number(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(return_value=["/home/daytona/file.py:notanumber:some text"])
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("text", "/")
         assert isinstance(result, list)
 
@@ -89,7 +89,7 @@ class TestDaytonaBackendGrepRaw:
     async def test_grep_raw_with_colons_in_content(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(return_value=["/home/daytona/file.py:15:url = 'http://example.com:8080'"])
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("url", "/")
         assert isinstance(result, list)
 
@@ -107,7 +107,7 @@ class TestDaytonaBackendGrepRaw:
             ]
         )
 
-        backend = DaytonaBackend(mock_sandbox)
+        backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("match", "/")
         assert isinstance(result, list)
 

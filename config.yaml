@@ -16,20 +16,10 @@ llm:
   # Override with PTC_LLMS_FILE environment variable
   name: "claude-sonnet-4-5"
 
-daytona:
-  # Daytona sandbox configuration
-  base_url: "https://app.daytona.io/api"
-  auto_stop_interval: 3600  # 1 hour in seconds
-  auto_archive_interval: 86400  # 24 hours in seconds
-  auto_delete_interval: 604800  # 7 days in seconds
+sandbox:
+  # Local sandbox configuration using ipybox
+  # Code execution runs locally in an IPython kernel
   python_version: "3.12"
-
-  # Snapshot configuration for faster sandbox initialization (7x speedup)
-  # First build takes ~10-15 minutes, subsequent sandboxes take ~8 seconds
-  # Hash will be automatically appended based on dependencies
-  snapshot_enabled: true  # Recommended: Enable snapshot-based sandbox creation
-  snapshot_name: "open-ptc-v1"  # Base name for snapshot (hash will be appended)
-  snapshot_auto_create: true  # Automatically create snapshot if it doesn't exist
 
 security:
   # Execution limits and validation
@@ -122,10 +112,11 @@ filesystem:
 
   # Working directory for the sandbox - used as the root for virtual path normalization
   # Agent sees virtual paths like /results/file.txt which map to {working_directory}/results/file.txt
-  working_directory: "/home/daytona"
+  # For local execution, this is typically a directory in your project
+  working_directory: "./workspace"
 
   allowed_directories:
-    - "/home/daytona"
+    - "./workspace"
     - "/tmp"
   enable_path_validation: true  # Validate paths against allowed_directories
 

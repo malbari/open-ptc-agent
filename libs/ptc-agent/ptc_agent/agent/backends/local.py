@@ -1,6 +1,7 @@
-"""Daytona backend for deepagents FilesystemMiddleware.
+"""Local backend for deepagents FilesystemMiddleware.
 
-This backend bridges deepagents' BackendProtocol and SandboxBackendProtocol to `PTCSandbox`.
+This backend bridges deepagents' BackendProtocol and SandboxBackendProtocol to `PTCSandbox`
+using local file operations and ipybox for code execution.
 
 Naming convention:
 - Async methods are prefixed with `a` (e.g. `aread`, `aglob_info`).
@@ -24,11 +25,11 @@ from ptc_agent.core.sandbox import PTCSandbox
 logger = structlog.get_logger(__name__)
 
 
-class DaytonaBackend:
-    """deepagents backend implementation backed by `PTCSandbox`."""
+class LocalBackend:
+    """deepagents backend implementation backed by local `PTCSandbox`."""
 
     def __init__(self, sandbox: PTCSandbox, root_dir: str = "/home/daytona", *, virtual_mode: bool = True) -> None:
-        """Create a new DaytonaBackend.
+        """Create a new LocalBackend.
 
         Args:
             sandbox: Initialized `PTCSandbox` instance.
@@ -38,15 +39,15 @@ class DaytonaBackend:
         self.sandbox = sandbox
         self.root_dir = root_dir.rstrip("/")
         self.virtual_mode = virtual_mode
-        logger.info("Initialized DaytonaBackend", root_dir=self.root_dir, virtual_mode=self.virtual_mode)
+        logger.info("Initialized LocalBackend", root_dir=self.root_dir, virtual_mode=self.virtual_mode)
 
     @property
     def id(self) -> str:
         """Return a stable identifier for this backend instance."""
-        return self.sandbox.sandbox_id or "unknown"
+        return self.sandbox.sandbox_id or "local"
 
     def _normalize_path(self, path: str) -> str:
-        """Normalize a path into an absolute sandbox path."""
+        """Normalize a path into an absolute local path."""
         if not self.virtual_mode:
             return path
 
@@ -55,7 +56,7 @@ class DaytonaBackend:
 
         path = path.strip()
 
-        # Already absolute in sandbox
+        # Already absolute in allowed directories
         if path.startswith(("/home/daytona", "/tmp")):
             return path
 
@@ -78,7 +79,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use als_info()")
+        raise RuntimeError("LocalBackend is async-native; use als_info()")
 
     def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:  # pragma: no cover
         """Read a file (sync).
@@ -86,7 +87,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use aread()")
+        raise RuntimeError("LocalBackend is async-native; use aread()")
 
     def write(self, file_path: str, content: str) -> WriteResult:  # pragma: no cover
         """Write a file (sync).
@@ -94,7 +95,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use awrite()")
+        raise RuntimeError("LocalBackend is async-native; use awrite()")
 
     def edit(self, file_path: str, old_string: str, new_string: str, *, replace_all: bool = False) -> EditResult:  # pragma: no cover
         """Edit a file (sync).
@@ -102,7 +103,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use aedit()")
+        raise RuntimeError("LocalBackend is async-native; use aedit()")
 
     def grep_raw(self, pattern: str, path: str | None = None, glob: str | None = None) -> list[dict] | str:  # pragma: no cover
         """Search for pattern matches (sync).
@@ -110,7 +111,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use agrep_raw()")
+        raise RuntimeError("LocalBackend is async-native; use agrep_raw()")
 
     def glob_info(self, pattern: str, path: str = "/") -> list[dict]:  # pragma: no cover
         """Return glob matches (sync).
@@ -118,7 +119,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use aglob_info()")
+        raise RuntimeError("LocalBackend is async-native; use aglob_info()")
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:  # pragma: no cover
         """Upload files (sync).
@@ -126,7 +127,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use aupload_files()")
+        raise RuntimeError("LocalBackend is async-native; use aupload_files()")
 
     def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:  # pragma: no cover
         """Download files (sync).
@@ -134,7 +135,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use adownload_files()")
+        raise RuntimeError("LocalBackend is async-native; use adownload_files()")
 
     def execute(self, command: str) -> ExecuteResponse:  # pragma: no cover
         """Execute a shell command (sync).
@@ -142,7 +143,7 @@ class DaytonaBackend:
         Raises:
             RuntimeError: Always, because this backend is async-native.
         """
-        raise RuntimeError("DaytonaBackend is async-native; use aexecute()")
+        raise RuntimeError("LocalBackend is async-native; use aexecute()")
 
     # ---------------------------------------------------------------------
     # Async protocol methods
@@ -276,7 +277,7 @@ class DaytonaBackend:
         return await asyncio.gather(*[_upload_one(p, c) for p, c in files])
 
     async def aexecute(self, command: str) -> ExecuteResponse:
-        """Execute a shell command in the sandbox."""
+        """Execute a shell command locally."""
         try:
             res = await self.sandbox.execute_bash_command(command=command, working_dir=self.root_dir, timeout=60)
             output = (res.get("stdout") or "") + (res.get("stderr") or "")

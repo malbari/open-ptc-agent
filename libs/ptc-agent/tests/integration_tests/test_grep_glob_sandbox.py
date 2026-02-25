@@ -1,7 +1,7 @@
 """Integration tests for Grep and Glob tools in a real sandbox environment.
 
-These tests require a running Daytona sandbox and will:
-1. Set up a Daytona sandbox with MCP tools
+These tests require a running local sandbox (ipybox) and will:
+1. Set up a local sandbox with MCP tools
 2. Create test files in the sandbox
 3. Test Glob and Grep tool functionality
 

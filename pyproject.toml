@@ -17,6 +17,7 @@ members = ["libs/*"]
 [tool.uv.sources]
 ptc-agent = { workspace = true }
 ptc-cli = { workspace = true }
+ipybox = { path = "/Users/M.Albari/projects/ipybox" }
 
 [dependency-groups]
 dev = [

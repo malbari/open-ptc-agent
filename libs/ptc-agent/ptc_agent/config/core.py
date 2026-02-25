@@ -1,7 +1,7 @@
 """Core configuration classes for Open PTC Agent infrastructure.
 
 This module defines pure data classes for core configuration:
-- Daytona sandbox settings
+- Sandbox settings (local execution with ipybox)
 - MCP server configurations
 - Filesystem access settings
 - Security settings
@@ -16,24 +16,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class DaytonaConfig(BaseModel):
-    """Daytona sandbox configuration.
+class SandboxConfig(BaseModel):
+    """Local sandbox configuration for ipybox-based code execution.
 
-    All fields have sensible defaults. Only api_key needs to be set
-    (via DAYTONA_API_KEY environment variable).
+    All fields have sensible defaults for local execution.
     """
 
-    api_key: str = ""  # Set via DAYTONA_API_KEY env var, validated later
-    base_url: str = "https://app.daytona.io/api"
-    auto_stop_interval: int = 3600  # 1 hour
-    auto_archive_interval: int = 86400  # 1 day
-    auto_delete_interval: int = 604800  # 7 days
+    working_directory: str = "/home/daytona"
     python_version: str = "3.12"
-
-    # Snapshot configuration for faster sandbox initialization
-    snapshot_enabled: bool = True
-    snapshot_name: str | None = None
-    snapshot_auto_create: bool = True
+    auto_install_dependencies: bool = True
 
 
 class SecurityConfig(BaseModel):
@@ -97,7 +88,7 @@ class LoggingConfig(BaseModel):
 class FilesystemConfig(BaseModel):
     """Filesystem access configuration for first-class filesystem tools.
 
-    Defaults to the standard Daytona sandbox directories.
+    Defaults to the standard workspace directories for local execution.
     """
 
     working_directory: str = "/home/daytona"
@@ -115,11 +106,11 @@ class CoreConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Sub-configurations
-    daytona: DaytonaConfig
-    security: SecurityConfig
-    mcp: MCPConfig
-    logging: LoggingConfig
-    filesystem: FilesystemConfig
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
+    mcp: MCPConfig = Field(default_factory=MCPConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    filesystem: FilesystemConfig = Field(default_factory=FilesystemConfig)
     config_file_dir: Path | None = Field(default=None, exclude=True)
 
     def validate_api_keys(self) -> None:
@@ -128,14 +119,5 @@ class CoreConfig(BaseModel):
         Raises:
             ValueError: If required API keys are missing
         """
-        missing_keys = []
-
-        if not self.daytona.api_key:
-            missing_keys.append("DAYTONA_API_KEY")
-
-        if missing_keys:
-            raise ValueError(
-                f"Missing required credentials in .env file:\n"
-                f"  - {chr(10).join(missing_keys)}\n"
-                f"Please add these credentials to your .env file."
-            )
+        # No required API keys for local execution
+        pass

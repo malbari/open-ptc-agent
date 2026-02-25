@@ -22,7 +22,7 @@ __version__ = "0.1.0"
 
 # Re-export commonly used classes for convenience
 from ptc_agent.agent import (
-    DaytonaBackend,
+    LocalBackend,
     PTCAgent,
     PTCExecutor,
     create_ptc_agent,
@@ -47,7 +47,7 @@ __all__ = [
     # Config
     "AgentConfig",
     "CoreConfig",
-    "DaytonaBackend",
+    "LocalBackend",
     "LLMConfig",
     "LLMDefinition",
     "MCPRegistry",

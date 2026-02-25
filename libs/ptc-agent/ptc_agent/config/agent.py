@@ -14,11 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ptc_agent.config.core import (
     CoreConfig,
-    DaytonaConfig,
     FilesystemConfig,
     LoggingConfig,
     MCPConfig,
     MCPServerConfig,
+    SandboxConfig,
     SecurityConfig,
 )
 
@@ -94,7 +94,7 @@ class AgentConfig(BaseModel):
     logging: LoggingConfig
 
     # Reference to core config (sandbox, MCP, filesystem)
-    daytona: DaytonaConfig
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     mcp: MCPConfig
     filesystem: FilesystemConfig
 
@@ -132,8 +132,6 @@ class AgentConfig(BaseModel):
     def create(
         cls,
         llm: "BaseChatModel",
-        daytona_api_key: str | None = None,
-        daytona_base_url: str = "https://app.daytona.io/api",
         mcp_servers: list[MCPServerConfig] | None = None,
         allowed_directories: list[str] | None = None,
         **kwargs: Any,
@@ -143,15 +141,10 @@ class AgentConfig(BaseModel):
         Required:
             llm: A LangChain chat model instance (e.g., ChatAnthropic, ChatOpenAI)
 
-        Required Environment Variables:
-            DAYTONA_API_KEY: Your Daytona API key (get from https://app.daytona.io)
-                            Or pass daytona_api_key directly.
-
-        Optional - Daytona:
-            daytona_api_key: Override DAYTONA_API_KEY env var
-            daytona_base_url: API URL (default: "https://app.daytona.io/api")
-            python_version: Python version in sandbox (default: "3.12")
-            auto_stop_interval: Seconds before auto-stop (default: 3600)
+        Optional - Sandbox:
+            working_directory: Working directory for local execution (default: "/home/daytona")
+            python_version: Python version (default: "3.12")
+            auto_install_dependencies: Auto-install missing packages (default: True)
 
         Optional - MCP:
             mcp_servers: List[MCPServerConfig] for additional tools (default: [])
@@ -199,20 +192,11 @@ class AgentConfig(BaseModel):
         # Create LLM config (placeholder for file-based loading compatibility)
         llm_config = LLMConfig(name="custom")
 
-        # Create Daytona config with defaults
-        api_key = daytona_api_key or os.getenv("DAYTONA_API_KEY", "")
-        if not api_key:
-            raise ValueError("DAYTONA_API_KEY must be provided or set in environment")
-        daytona_config = DaytonaConfig(
-            api_key=api_key,
-            base_url=daytona_base_url,
-            auto_stop_interval=kwargs.pop("auto_stop_interval", 3600),
-            auto_archive_interval=kwargs.pop("auto_archive_interval", 86400),
-            auto_delete_interval=kwargs.pop("auto_delete_interval", 604800),
+        # Create Sandbox config with defaults
+        sandbox_config = SandboxConfig(
+            working_directory=kwargs.pop("working_directory", "/home/daytona"),
             python_version=kwargs.pop("python_version", "3.12"),
-            snapshot_enabled=kwargs.pop("snapshot_enabled", True),
-            snapshot_name=kwargs.pop("snapshot_name", None),
-            snapshot_auto_create=kwargs.pop("snapshot_auto_create", True),
+            auto_install_dependencies=kwargs.pop("auto_install_dependencies", True),
         )
 
         # Create Security config with defaults
@@ -262,7 +246,7 @@ class AgentConfig(BaseModel):
         # Create the config
         config = cls(
             llm=llm_config,
-            daytona=daytona_config,
+            sandbox=sandbox_config,
             security=security_config,
             mcp=mcp_config,
             logging=logging_config,
@@ -282,18 +266,15 @@ class AgentConfig(BaseModel):
     def validate_api_keys(self) -> None:
         """Validate that required API keys are present.
 
-        For configs created via create(), only checks DAYTONA_API_KEY since
-        the LLM client is passed directly with its own API key.
+        For configs created via create(), no API keys are required for the sandbox
+        since it runs locally with ipybox.
 
-        For configs created via load_from_files(), also checks the LLM API key.
+        For configs created via load_from_files(), checks the LLM API key.
 
         Raises:
             ValueError: If required API keys are missing
         """
         missing_keys = []
-
-        if not self.daytona.api_key:
-            missing_keys.append("DAYTONA_API_KEY")
 
         # Check LLM API key only if using llm_definition (file-based loading)
         if self.llm_definition is not None:
@@ -403,7 +384,7 @@ class AgentConfig(BaseModel):
             CoreConfig instance with sandbox/MCP settings
         """
         core_config = CoreConfig(
-            daytona=self.daytona,
+            sandbox=self.sandbox,
             security=self.security,
             mcp=self.mcp,
             logging=self.logging,

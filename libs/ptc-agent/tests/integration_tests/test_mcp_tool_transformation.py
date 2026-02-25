@@ -1,7 +1,7 @@
 """Integration tests for MCP tool transformation.
 
 These tests verify that MCP tools are correctly transformed to Python modules
-in the Daytona sandbox.
+in the local sandbox (ipybox).
 
 Run with: pytest tests/integration_tests/test_mcp_tool_transformation.py -v -m integration
 Skip with: pytest -m "not integration"
@@ -101,12 +101,10 @@ def fake_home(tmp_path_factory):
     mcp_server_path = str(mcp_servers_dir / "test_mcp_server.py")
     config_data = {
         "llm": {"name": "test-llm"},
-        "daytona": {
-            "base_url": "https://app.daytona.io/api",
-            "auto_stop_interval": 3600,
-            "auto_archive_interval": 86400,
-            "auto_delete_interval": 604800,
+        "sandbox": {
+            "working_directory": "/home/daytona",
             "python_version": "3.12",
+            "auto_install_dependencies": True,
         },
         "security": {
             "max_execution_time": 300,
@@ -192,10 +190,10 @@ class TestConfiguration:
         # May have 0 servers configured - that's valid
 
     @pytest.mark.asyncio(loop_scope="module")
-    async def test_config_has_daytona_settings(self, config):
-        """Test that Daytona settings are present."""
-        assert hasattr(config, "daytona")
-        assert hasattr(config.daytona, "base_url")
+    async def test_config_has_sandbox_settings(self, config):
+        """Test that sandbox settings are present."""
+        assert hasattr(config, "sandbox")
+        assert hasattr(config.sandbox, "working_directory")
 
 
 # =============================================================================
