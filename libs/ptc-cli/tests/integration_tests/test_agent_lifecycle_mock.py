@@ -31,11 +31,11 @@ class TestAgentLifecyclePersistence:
 
         # Create mock config
         mock_core_config = Mock()
-        mock_core_config.daytona = Mock()
-        mock_core_config.daytona.base_url = "http://localhost:3000"
-        mock_core_config.daytona.python_version = "3.12"
-        mock_core_config.daytona.snapshot_enabled = False
-        mock_core_config.daytona.snapshot_name = None
+        mock_core_config.sandbox = Mock()
+        mock_core_config.sandbox.working_directory = "/workspace"
+        mock_core_config.sandbox.python_version = "3.12"
+        mock_core_config.sandbox
+        mock_core_config.sandbox
         mock_core_config.mcp = Mock()
         mock_core_config.mcp.servers = []
 
@@ -60,11 +60,11 @@ class TestAgentLifecyclePersistence:
 
         # Create first config
         mock_core_config1 = Mock()
-        mock_core_config1.daytona = Mock()
-        mock_core_config1.daytona.base_url = "http://localhost:3000"
-        mock_core_config1.daytona.python_version = "3.12"
-        mock_core_config1.daytona.snapshot_enabled = False
-        mock_core_config1.daytona.snapshot_name = None
+        mock_core_config.sandbox = Mock()
+        mock_core_config.sandbox.working_directory = "/workspace"
+        mock_core_config.sandbox.python_version = "3.12"
+        mock_core_config.sandbox
+        mock_core_config.sandbox
         mock_core_config1.mcp = Mock()
         mock_core_config1.mcp.servers = []
 
@@ -73,11 +73,11 @@ class TestAgentLifecyclePersistence:
 
         # Create second config with different Python version
         mock_core_config2 = Mock()
-        mock_core_config2.daytona = Mock()
-        mock_core_config2.daytona.base_url = "http://localhost:3000"
-        mock_core_config2.daytona.python_version = "3.11"  # Different!
-        mock_core_config2.daytona.snapshot_enabled = False
-        mock_core_config2.daytona.snapshot_name = None
+        mock_core_config.sandbox = Mock()
+        mock_core_config.sandbox.working_directory = "/workspace"
+        mock_core_config.sandbox.python_version = "3.11"  # Different!
+        mock_core_config.sandbox
+        mock_core_config.sandbox
         mock_core_config2.mcp = Mock()
         mock_core_config2.mcp.servers = []
 

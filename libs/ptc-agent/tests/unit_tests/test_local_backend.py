@@ -24,8 +24,8 @@ class TestLocalBackendGrepRaw:
     async def test_grep_raw_with_string_list_result(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(
             return_value=[
-                "/home/daytona/file1.py:10:def hello():",
-                "/home/daytona/file2.py:25:def world():",
+                "/workspace/file1.py:10:def hello():",
+                "/workspace/file2.py:25:def world():",
             ]
         )
 
@@ -34,34 +34,34 @@ class TestLocalBackendGrepRaw:
         assert isinstance(result, list)
 
         assert len(result) == 2
-        assert result[0]["path"] == "/home/daytona/file1.py"
+        assert result[0]["path"] == "/workspace/file1.py"
         assert result[0]["line"] == 10
         assert result[0]["text"] == "def hello():"
-        assert result[1]["path"] == "/home/daytona/file2.py"
+        assert result[1]["path"] == "/workspace/file2.py"
         assert result[1]["line"] == 25
         assert result[1]["text"] == "def world():"
 
     async def test_grep_raw_with_string_result(self, mock_sandbox):
-        mock_sandbox.agrep_content = AsyncMock(return_value="/home/daytona/file.py:5:match line")
+        mock_sandbox.agrep_content = AsyncMock(return_value="/workspace/file.py:5:match line")
 
         backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("match", "/")
         assert isinstance(result, list)
 
         assert len(result) == 1
-        assert result[0]["path"] == "/home/daytona/file.py"
+        assert result[0]["path"] == "/workspace/file.py"
         assert result[0]["line"] == 5
         assert result[0]["text"] == "match line"
 
     async def test_grep_raw_with_dict_list_result(self, mock_sandbox):
-        mock_sandbox.agrep_content = AsyncMock(return_value=[{"path": "/home/daytona/file.py", "line": 10, "text": "match"}])
+        mock_sandbox.agrep_content = AsyncMock(return_value=[{"path": "/workspace/file.py", "line": 10, "text": "match"}])
 
         backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("match", "/")
         assert isinstance(result, list)
 
         assert len(result) == 1
-        assert result[0]["path"] == "/home/daytona/file.py"
+        assert result[0]["path"] == "/workspace/file.py"
         assert result[0]["line"] == 10
         assert result[0]["text"] == "match"
 
@@ -75,35 +75,35 @@ class TestLocalBackendGrepRaw:
         assert result == []
 
     async def test_grep_raw_with_invalid_line_number(self, mock_sandbox):
-        mock_sandbox.agrep_content = AsyncMock(return_value=["/home/daytona/file.py:notanumber:some text"])
+        mock_sandbox.agrep_content = AsyncMock(return_value=["/workspace/file.py:notanumber:some text"])
 
         backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("text", "/")
         assert isinstance(result, list)
 
         assert len(result) == 1
-        assert result[0]["path"] == "/home/daytona/file.py"
+        assert result[0]["path"] == "/workspace/file.py"
         assert result[0]["line"] == 0
         assert result[0]["text"] == "notanumber:some text"
 
     async def test_grep_raw_with_colons_in_content(self, mock_sandbox):
-        mock_sandbox.agrep_content = AsyncMock(return_value=["/home/daytona/file.py:15:url = 'http://example.com:8080'"])
+        mock_sandbox.agrep_content = AsyncMock(return_value=["/workspace/file.py:15:url = 'http://example.com:8080'"])
 
         backend = LocalBackend(mock_sandbox)
         result = await backend.agrep_raw("url", "/")
         assert isinstance(result, list)
 
         assert len(result) == 1
-        assert result[0]["path"] == "/home/daytona/file.py"
+        assert result[0]["path"] == "/workspace/file.py"
         assert result[0]["line"] == 15
         assert result[0]["text"] == "url = 'http://example.com:8080'"
 
     async def test_grep_raw_with_empty_string_in_list(self, mock_sandbox):
         mock_sandbox.agrep_content = AsyncMock(
             return_value=[
-                "/home/daytona/file.py:10:match",
+                "/workspace/file.py:10:match",
                 "",
-                "/home/daytona/file2.py:20:another",
+                "/workspace/file2.py:20:another",
             ]
         )
 

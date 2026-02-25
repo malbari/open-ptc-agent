@@ -69,7 +69,7 @@ class TestExportResult:
             timestamp="20250324_120000",
         )
         result.files_failed = [
-            {"path": "/home/daytona/results/bad.txt", "error": "File not found"}
+            {"path": "/workspace/results/bad.txt", "error": "File not found"}
         ]
 
         summary = result.summary()
@@ -101,8 +101,8 @@ class TestExportSandboxFiles:
         """Test successful export of files."""
         # Mock list_directory to return files
         mock_sandbox.list_directory.return_value = [
-            {"name": "file1.txt", "type": "file", "path": "/home/daytona/results/file1.txt"},
-            {"name": "file2.txt", "type": "file", "path": "/home/daytona/results/file2.txt"},
+            {"name": "file1.txt", "type": "file", "path": "/workspace/results/file1.txt"},
+            {"name": "file2.txt", "type": "file", "path": "/workspace/results/file2.txt"},
         ]
 
         # Mock download methods
@@ -127,8 +127,8 @@ class TestExportSandboxFiles:
     def test_partial_failure_continues(self, mock_sandbox, temp_output_dir):
         """Test that export continues after individual file failures."""
         mock_sandbox.list_directory.return_value = [
-            {"name": "good.txt", "type": "file", "path": "/home/daytona/results/good.txt"},
-            {"name": "bad.txt", "type": "file", "path": "/home/daytona/results/bad.txt"},
+            {"name": "good.txt", "type": "file", "path": "/workspace/results/good.txt"},
+            {"name": "bad.txt", "type": "file", "path": "/workspace/results/bad.txt"},
         ]
 
         # First file succeeds, second fails
@@ -181,10 +181,10 @@ class TestExportSandboxFiles:
         # Second call: subdirectory with file
         mock_sandbox.list_directory.side_effect = [
             [
-                {"name": "subdir", "type": "directory", "path": "/home/daytona/results/subdir"},
+                {"name": "subdir", "type": "directory", "path": "/workspace/results/subdir"},
             ],
             [
-                {"name": "file.txt", "type": "file", "path": "/home/daytona/results/subdir/file.txt"},
+                {"name": "file.txt", "type": "file", "path": "/workspace/results/subdir/file.txt"},
             ],
         ]
 
@@ -233,7 +233,7 @@ class TestExportSandboxFiles:
     def test_selective_directories(self, mock_sandbox, temp_output_dir):
         """Test exporting only specified directories."""
         mock_sandbox.list_directory.return_value = [
-            {"name": "file.txt", "type": "file", "path": "/home/daytona/results/file.txt"},
+            {"name": "file.txt", "type": "file", "path": "/workspace/results/file.txt"},
         ]
         mock_sandbox.download_file_bytes.return_value = b"content"
 
@@ -250,7 +250,7 @@ class TestExportSandboxFiles:
     def test_fallback_to_read_file(self, mock_sandbox, temp_output_dir):
         """Test fallback from download_file_bytes to read_file."""
         mock_sandbox.list_directory.return_value = [
-            {"name": "text.txt", "type": "file", "path": "/home/daytona/results/text.txt"},
+            {"name": "text.txt", "type": "file", "path": "/workspace/results/text.txt"},
         ]
 
         # download_file_bytes returns None, fallback to read_file
@@ -274,7 +274,7 @@ class TestExportSandboxFiles:
     def test_permission_error_handling(self, mock_sandbox, temp_output_dir):
         """Test handling of permission errors."""
         mock_sandbox.list_directory.return_value = [
-            {"name": "protected.txt", "type": "file", "path": "/home/daytona/results/protected.txt"},
+            {"name": "protected.txt", "type": "file", "path": "/workspace/results/protected.txt"},
         ]
 
         mock_sandbox.download_file_bytes.side_effect = PermissionError("Access denied")
@@ -297,11 +297,11 @@ class TestExportSandboxFiles:
         # 2. Recursive discovery within discover_files_recursive
         mock_sandbox.list_directory.side_effect = [
             # First directory: code
-            [{"name": "code1.py", "type": "file", "path": "/home/daytona/code/code1.py"}],  # Initial check
-            [{"name": "code1.py", "type": "file", "path": "/home/daytona/code/code1.py"}],  # Recursive discovery
+            [{"name": "code1.py", "type": "file", "path": "/workspace/code/code1.py"}],  # Initial check
+            [{"name": "code1.py", "type": "file", "path": "/workspace/code/code1.py"}],  # Recursive discovery
             # Second directory: data
-            [{"name": "data1.csv", "type": "file", "path": "/home/daytona/data/data1.csv"}],  # Initial check
-            [{"name": "data1.csv", "type": "file", "path": "/home/daytona/data/data1.csv"}],  # Recursive discovery
+            [{"name": "data1.csv", "type": "file", "path": "/workspace/data/data1.csv"}],  # Initial check
+            [{"name": "data1.csv", "type": "file", "path": "/workspace/data/data1.csv"}],  # Recursive discovery
         ]
 
         mock_sandbox.download_file_bytes.side_effect = [b"code content", b"data content"]

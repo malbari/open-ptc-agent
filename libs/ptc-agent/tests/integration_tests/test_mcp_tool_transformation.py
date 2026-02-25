@@ -102,7 +102,7 @@ def fake_home(tmp_path_factory):
     config_data = {
         "llm": {"name": "test-llm"},
         "sandbox": {
-            "working_directory": "/home/daytona",
+            "working_directory": "/workspace",
             "python_version": "3.12",
             "auto_install_dependencies": True,
         },
@@ -130,8 +130,8 @@ def fake_home(tmp_path_factory):
         },
         "logging": {"level": "WARNING", "file": "logs/test.log"},
         "filesystem": {
-            "working_directory": "/home/daytona",
-            "allowed_directories": ["/home/daytona", "/tmp"],
+            "working_directory": "/workspace",
+            "allowed_directories": ["/workspace", "/tmp"],
             "enable_path_validation": True,
         },
     }
@@ -247,7 +247,7 @@ class TestSandboxDirectoryStructure:
     @pytest.mark.asyncio(loop_scope="module")
     async def test_can_list_work_directory(self, sandbox):
         """Test that we can list the work directory."""
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
 
         try:
             contents = await sandbox.als_directory(work_dir)
@@ -258,7 +258,7 @@ class TestSandboxDirectoryStructure:
     @pytest.mark.asyncio(loop_scope="module")
     async def test_tools_directory_exists(self, sandbox):
         """Test that tools directory exists in sandbox."""
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
         tools_dir = f"{work_dir}/tools"
 
         try:
@@ -281,7 +281,7 @@ class TestGeneratedToolModules:
     @pytest.mark.asyncio(loop_scope="module")
     async def test_mcp_client_module_exists(self, sandbox):
         """Test that mcp_client.py is generated."""
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
         mcp_client_path = f"{work_dir}/tools/mcp_client.py"
 
         try:
@@ -297,7 +297,7 @@ class TestGeneratedToolModules:
     @pytest.mark.asyncio(loop_scope="module")
     async def test_server_modules_exist(self, sandbox, mcp_registry):
         """Test that a Python module is generated for each MCP server."""
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
         tools_by_server = mcp_registry.get_all_tools()
 
         for server_name in tools_by_server:
@@ -341,7 +341,7 @@ class TestToolImport:
 
         # Convert tool name to valid Python identifier
         func_name = first_tool.name.replace("-", "_").replace(".", "_")
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
 
         test_code = f"""
 import sys
@@ -385,7 +385,7 @@ except Exception as e:
             pytest.skip("No tools found in any server")
 
         func_name = first_tool.name.replace("-", "_").replace(".", "_")
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
 
         test_code = f"""
 import sys
@@ -423,7 +423,7 @@ class TestToolDocumentation:
     @pytest.mark.asyncio(loop_scope="module")
     async def test_docs_directory_exists(self, sandbox):
         """Test that documentation directory exists."""
-        work_dir = getattr(sandbox, "_work_dir", "/home/daytona")
+        work_dir = getattr(sandbox, "_work_dir", "/workspace")
         docs_dir = f"{work_dir}/tools/docs"
 
         try:

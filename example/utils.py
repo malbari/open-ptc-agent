@@ -411,11 +411,11 @@ def export_sandbox_files(
         """Convert relative directory to absolute sandbox path."""
         if directory.startswith("/"):
             return directory
-        return f"/home/daytona/{directory}"
+        return f"/workspace/{directory}"
 
     def get_relative_local_path(sandbox_path: str) -> str:
-        """Strip /home/daytona/ prefix for local path construction."""
-        prefix = "/home/daytona/"
+        """Strip /workspace/ prefix for local path construction."""
+        prefix = "/workspace/"
         if sandbox_path.startswith(prefix):
             return sandbox_path[len(prefix) :]
         return sandbox_path

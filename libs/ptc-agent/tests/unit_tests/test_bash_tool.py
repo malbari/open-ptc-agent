@@ -25,13 +25,13 @@ class TestExecuteBashTool:
         )
 
         execute_bash = create_execute_bash_tool(mock_async_sandbox)
-        result = await execute_bash.ainvoke({"command": "ls", "working_dir": "/home/daytona"})
+        result = await execute_bash.ainvoke({"command": "ls", "working_dir": "/workspace"})
 
         assert "ERROR" not in result
         assert "file1.txt" in result
         assert "file2.txt" in result
         mock_async_sandbox.execute_bash_command.assert_called_once_with(
-            "ls", working_dir="/home/daytona", timeout=120.0, background=False
+            "ls", working_dir="/workspace", timeout=120.0, background=False
         )
 
     @pytest.mark.asyncio
@@ -42,7 +42,7 @@ class TestExecuteBashTool:
         )
 
         execute_bash = create_execute_bash_tool(mock_async_sandbox)
-        result = await execute_bash.ainvoke({"command": "mkdir -p /home/daytona/testdir"})
+        result = await execute_bash.ainvoke({"command": "mkdir -p /workspace/testdir"})
 
         assert "ERROR" not in result
         assert "Command completed successfully" in result
@@ -129,11 +129,11 @@ class TestExecuteBashTool:
         )
 
         execute_bash = create_execute_bash_tool(mock_async_sandbox)
-        result = await execute_bash.ainvoke({"command": "ls", "working_dir": "/home/daytona/results"})
+        result = await execute_bash.ainvoke({"command": "ls", "working_dir": "/workspace/results"})
 
         assert "ERROR" not in result
         mock_async_sandbox.execute_bash_command.assert_called_once_with(
-            "ls", working_dir="/home/daytona/results", timeout=120.0, background=False
+            "ls", working_dir="/workspace/results", timeout=120.0, background=False
         )
 
     @pytest.mark.asyncio

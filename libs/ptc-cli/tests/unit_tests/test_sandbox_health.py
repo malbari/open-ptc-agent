@@ -15,12 +15,12 @@ class TestCheckSandboxHealth:
         """Test check_sandbox_health returns True for running sandbox."""
         # Create mock session with sandbox
         mock_session = Mock()
-        mock_daytona_sandbox = Mock()
-        mock_daytona_sandbox.state = "started"
-        mock_daytona_sandbox.refresh_data = Mock()
+        mock_sandbox_obj = Mock()
+        mock_sandbox_obj.state = "started"
+        mock_sandbox_obj.refresh_data = Mock()
 
         mock_sandbox = Mock()
-        mock_sandbox.sandbox = mock_daytona_sandbox
+        mock_sandbox.sandbox = mock_sandbox_obj
 
         mock_session.sandbox = mock_sandbox
 
@@ -32,18 +32,18 @@ class TestCheckSandboxHealth:
             result = await check_sandbox_health(mock_session)
 
         assert result is True
-        mock_daytona_sandbox.refresh_data.assert_called_once()
+        mock_sandbox_obj.refresh_data.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_check_sandbox_health_returns_false_for_stopped_sandbox(self):
         """Test check_sandbox_health returns False for stopped sandbox."""
         mock_session = Mock()
-        mock_daytona_sandbox = Mock()
-        mock_daytona_sandbox.state = "stopped"
-        mock_daytona_sandbox.refresh_data = Mock()
+        mock_sandbox_obj = Mock()
+        mock_sandbox_obj.state = "stopped"
+        mock_sandbox_obj.refresh_data = Mock()
 
         mock_sandbox = Mock()
-        mock_sandbox.sandbox = mock_daytona_sandbox
+        mock_sandbox.sandbox = mock_sandbox_obj
 
         mock_session.sandbox = mock_sandbox
 
@@ -77,11 +77,11 @@ class TestCheckSandboxHealth:
     async def test_check_sandbox_health_returns_false_on_refresh_error(self):
         """Test check_sandbox_health returns False on refresh error."""
         mock_session = Mock()
-        mock_daytona_sandbox = Mock()
-        mock_daytona_sandbox.refresh_data = Mock(side_effect=Exception("Connection error"))
+        mock_sandbox_obj = Mock()
+        mock_sandbox_obj.refresh_data = Mock(side_effect=Exception("Connection error"))
 
         mock_sandbox = Mock()
-        mock_sandbox.sandbox = mock_daytona_sandbox
+        mock_sandbox.sandbox = mock_sandbox_obj
 
         mock_session.sandbox = mock_sandbox
 
@@ -94,16 +94,16 @@ class TestCheckSandboxHealth:
     async def test_check_sandbox_health_with_state_enum(self):
         """Test check_sandbox_health with state as enum object."""
         mock_session = Mock()
-        mock_daytona_sandbox = Mock()
+        mock_sandbox_obj = Mock()
 
         # Mock state as enum-like object with .value attribute
         mock_state = Mock()
         mock_state.value = "started"
-        mock_daytona_sandbox.state = mock_state
-        mock_daytona_sandbox.refresh_data = Mock()
+        mock_sandbox_obj.state = mock_state
+        mock_sandbox_obj.refresh_data = Mock()
 
         mock_sandbox = Mock()
-        mock_sandbox.sandbox = mock_daytona_sandbox
+        mock_sandbox.sandbox = mock_sandbox_obj
 
         mock_session.sandbox = mock_sandbox
 

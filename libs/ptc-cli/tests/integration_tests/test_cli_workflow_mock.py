@@ -90,8 +90,8 @@ class TestSlashCommandWorkflow:
         mock_session = Mock()
         mock_sandbox = Mock()
         mock_sandbox.aglob_files = AsyncMock(return_value=[
-            "/home/daytona/file1.txt",
-            "/home/daytona/src/file2.py",
+            "/workspace/file1.txt",
+            "/workspace/src/file2.py",
         ])
         mock_session.sandbox = mock_sandbox
         mock_session.get_sandbox = AsyncMock(return_value=mock_sandbox)
@@ -114,7 +114,7 @@ class TestSlashCommandWorkflow:
         """Test /view command with active sandbox."""
         mock_session = Mock()
         mock_sandbox = Mock()
-        mock_sandbox.normalize_path = Mock(return_value="/home/daytona/file.txt")
+        mock_sandbox.normalize_path = Mock(return_value="/workspace/file.txt")
         mock_sandbox.aread_file_text = AsyncMock(return_value="File content here")
         mock_session.sandbox = mock_sandbox
         mock_session.get_sandbox = AsyncMock(return_value=mock_sandbox)
@@ -123,7 +123,7 @@ class TestSlashCommandWorkflow:
 
         assert result == "handled"
         mock_sandbox.normalize_path.assert_called_once_with("file.txt")
-        mock_sandbox.aread_file_text.assert_awaited_once_with("/home/daytona/file.txt")
+        mock_sandbox.aread_file_text.assert_awaited_once_with("/workspace/file.txt")
 
     @pytest.mark.asyncio
     async def test_copy_command_without_sandbox(self, mock_agent, token_tracker, session_state):

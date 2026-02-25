@@ -56,9 +56,6 @@ test/output/
 # Jupyter
 .ipynb_checkpoints
 
-# Daytona
-.daytona/
-/output/
 # Temporary files
 tmp/
 temp/

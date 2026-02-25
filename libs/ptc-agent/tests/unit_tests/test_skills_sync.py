@@ -23,7 +23,7 @@ async def test_sync_skills_skips_when_no_local_files(sandbox_instance: PTCSandbo
     monkeypatch.setattr(sandbox_instance, "aread_file_text", _read)
 
     did_upload = await sandbox_instance.sync_skills(
-        [("/tmp/user", "/home/daytona/skills"), ("/tmp/project", "/home/daytona/skills")],
+        [("/tmp/user", "/workspace/skills"), ("/tmp/project", "/workspace/skills")],
         reusing_sandbox=True,
     )
 
@@ -52,7 +52,7 @@ async def test_sync_skills_uploads_when_remote_missing(sandbox_instance: PTCSand
     progress: list[str] = []
 
     did_upload = await sandbox_instance.sync_skills(
-        [("/tmp/user", "/home/daytona/skills"), ("/tmp/project", "/home/daytona/skills")],
+        [("/tmp/user", "/workspace/skills"), ("/tmp/project", "/workspace/skills")],
         reusing_sandbox=True,
         on_progress=progress.append,
     )
@@ -82,7 +82,7 @@ async def test_sync_skills_skips_when_versions_match_and_reusing(sandbox_instanc
     monkeypatch.setattr(sandbox_instance, "_upload_skills", _upload)
 
     did_upload = await sandbox_instance.sync_skills(
-        [("/tmp/user", "/home/daytona/skills"), ("/tmp/project", "/home/daytona/skills")],
+        [("/tmp/user", "/workspace/skills"), ("/tmp/project", "/workspace/skills")],
         reusing_sandbox=True,
     )
 
@@ -109,7 +109,7 @@ async def test_sync_skills_uploads_when_versions_match_but_new_sandbox(sandbox_i
     monkeypatch.setattr(sandbox_instance, "_upload_skills", _upload)
 
     did_upload = await sandbox_instance.sync_skills(
-        [("/tmp/user", "/home/daytona/skills"), ("/tmp/project", "/home/daytona/skills")],
+        [("/tmp/user", "/workspace/skills"), ("/tmp/project", "/workspace/skills")],
         reusing_sandbox=False,
     )
 

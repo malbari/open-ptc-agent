@@ -16,14 +16,14 @@ class TestFileMentionsIntegration:
     def mock_session(self):
         """Create a mock session with sandbox that simulates code/data/results dirs."""
         mock_sandbox = Mock()
-        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/home/daytona/{p}")
+        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/workspace/{p}")
 
         # Simulate file content for various paths
         file_contents = {
-            "/home/daytona/code/main.py": "def main():\n    print('hello')",
-            "/home/daytona/data/input.csv": "col1,col2\n1,2\n3,4",
-            "/home/daytona/results/output.txt": "Processing complete",
-            "/home/daytona/test_file.txt": "Hello from test file!",
+            "/workspace/code/main.py": "def main():\n    print('hello')",
+            "/workspace/data/input.csv": "col1,col2\n1,2\n3,4",
+            "/workspace/results/output.txt": "Processing complete",
+            "/workspace/test_file.txt": "Hello from test file!",
         }
         mock_sandbox.read_file = Mock(side_effect=lambda p: file_contents.get(p))
 
@@ -86,14 +86,14 @@ class TestSlashCommandsFilesIntegration:
 
         # Simulate typical agent workspace structure
         mock_sandbox.aglob_files = AsyncMock(return_value=[
-            "/home/daytona/code/main.py",
-            "/home/daytona/code/utils.py",
-            "/home/daytona/data/input.csv",
-            "/home/daytona/results/output.txt",
-            "/home/daytona/README.md",
+            "/workspace/code/main.py",
+            "/workspace/code/utils.py",
+            "/workspace/data/input.csv",
+            "/workspace/results/output.txt",
+            "/workspace/README.md",
             # System directories that should be filtered
-            "/home/daytona/tools/helper.py",
-            "/home/daytona/mcp_servers/config.json",
+            "/workspace/tools/helper.py",
+            "/workspace/mcp_servers/config.json",
         ])
 
         mock_session = Mock()
@@ -169,11 +169,11 @@ class TestSlashCommandsViewIntegration:
     def mock_session_with_content(self):
         """Create a mock session with file content."""
         mock_sandbox = Mock()
-        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/home/daytona/{p}")
+        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/workspace/{p}")
 
         file_contents = {
-            "/home/daytona/code/main.py": "def hello():\n    print('world')",
-            "/home/daytona/data/input.csv": "col1,col2\n1,2",
+            "/workspace/code/main.py": "def hello():\n    print('world')",
+            "/workspace/data/input.csv": "col1,col2\n1,2",
         }
         mock_sandbox.aread_file_text = AsyncMock(side_effect=lambda p: file_contents.get(p))
         mock_sandbox.adownload_file_bytes = AsyncMock(return_value=b"fake image bytes")
@@ -252,7 +252,7 @@ class TestSlashCommandsDownloadIntegration:
     def mock_session_with_download(self):
         """Create a mock session with downloadable content."""
         mock_sandbox = Mock()
-        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/home/daytona/{p}")
+        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/workspace/{p}")
         mock_sandbox.aread_file_text = AsyncMock(return_value="This is downloadable content!")
         mock_sandbox.adownload_file_bytes = AsyncMock(return_value=b"binary content")
 
@@ -316,7 +316,7 @@ class TestSlashCommandsCopyIntegration:
     def mock_session_with_copy(self):
         """Create a mock session with copyable content."""
         mock_sandbox = Mock()
-        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/home/daytona/{p}")
+        mock_sandbox.normalize_path = Mock(side_effect=lambda p: f"/workspace/{p}")
         mock_sandbox.aread_file_text = AsyncMock(return_value="Content to copy to clipboard")
 
         mock_session = Mock()
@@ -470,10 +470,10 @@ class TestPathNormalization:
     """Test path normalization utility."""
 
     def test_normalize_removes_home_prefix(self):
-        """Test that /home/daytona/ prefix is removed."""
+        """Test that /workspace/ prefix is removed."""
         from ptc_cli.commands.slash import _normalize_path
 
-        result = _normalize_path("/home/daytona/code/main.py")
+        result = _normalize_path("/workspace/code/main.py")
         assert result == "code/main.py"
 
     def test_normalize_preserves_other_paths(self):

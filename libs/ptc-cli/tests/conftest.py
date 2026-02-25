@@ -138,7 +138,7 @@ def mock_sandbox():
     sandbox.is_healthy = AsyncMock(return_value=True)
     sandbox.execute = AsyncMock(return_value={"stdout": "", "stderr": "", "exit_code": 0})
     sandbox.aglob_files = AsyncMock(return_value=[])
-    sandbox.normalize_path = Mock(side_effect=lambda x: f"/home/daytona/{x}")
+    sandbox.normalize_path = Mock(side_effect=lambda x: f"/workspace/{x}")
     sandbox.read_file = Mock(return_value=None)
     sandbox.download_file_bytes = Mock(return_value=None)
 
@@ -182,11 +182,9 @@ def mock_agent_config():
 
     # Mock core config
     core_config = Mock()
-    core_config.daytona = Mock()
-    core_config.daytona.base_url = "https://api.daytona.io"
-    core_config.daytona.python_version = "3.11"
-    core_config.daytona.snapshot_enabled = False
-    core_config.daytona.snapshot_name = None
+    core_config.sandbox = Mock()
+    core_config.sandbox.python_version = "3.11"
+    core_config.sandbox.working_directory = "/workspace"
 
     # Mock MCP config
     core_config.mcp = Mock()

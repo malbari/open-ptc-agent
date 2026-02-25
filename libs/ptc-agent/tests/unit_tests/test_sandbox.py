@@ -13,10 +13,10 @@ class TestNormalizePath:
     @pytest.mark.parametrize(
         ("input_path", "expected"),
         [
-            ("", "/home/daytona"),
-            (".", "/home/daytona"),
-            ("/", "/home/daytona"),
-            (None, "/home/daytona"),
+            ("", "/workspace"),
+            (".", "/workspace"),
+            ("/", "/workspace"),
+            (None, "/workspace"),
         ],
         ids=["empty", "dot", "root", "none"],
     )
@@ -27,11 +27,11 @@ class TestNormalizePath:
     @pytest.mark.parametrize(
         ("input_path", "expected"),
         [
-            ("data/file.txt", "/home/daytona/data/file.txt"),
-            ("/results/output.txt", "/home/daytona/results/output.txt"),
-            ("/home/daytona/test.py", "/home/daytona/test.py"),
+            ("data/file.txt", "/workspace/data/file.txt"),
+            ("/results/output.txt", "/workspace/results/output.txt"),
+            ("/workspace/test.py", "/workspace/test.py"),
             ("/tmp/file.txt", "/tmp/file.txt"),
-            ("  data/file.txt  ", "/home/daytona/data/file.txt"),
+            ("  data/file.txt  ", "/workspace/data/file.txt"),
         ],
         ids=["relative", "virtual-absolute", "already-absolute", "tmp-path", "whitespace"],
     )
@@ -46,8 +46,8 @@ class TestVirtualizePath:
     @pytest.mark.parametrize(
         ("input_path", "expected"),
         [
-            ("/home/daytona/results/file.txt", "/results/file.txt"),
-            ("/home/daytona", "/"),
+            ("/workspace/results/file.txt", "/results/file.txt"),
+            ("/workspace", "/"),
             ("/tmp/file.txt", "/tmp/file.txt"),
             ("/etc/config", "/etc/config"),
         ],
@@ -64,11 +64,11 @@ class TestValidatePath:
     @pytest.mark.parametrize(
         "input_path",
         [
-            "/home/daytona/test.py",
+            "/workspace/test.py",
             "/tmp/test.txt",
             "/results/output.txt",
             "data/file.txt",
-            "/home/daytona",
+            "/workspace",
         ],
         ids=["working-dir", "tmp", "virtual", "relative", "exact-working-dir"],
     )
@@ -80,14 +80,14 @@ class TestValidatePath:
         """Virtual absolute paths always get normalized to working directory.
 
         This is a security feature - agent cannot escape the sandbox by using
-        paths like /etc/passwd. They get normalized to /home/daytona/etc/passwd.
+        paths like /etc/passwd. They get normalized to /workspace/etc/passwd.
         """
-        # Even with only /home/daytona allowed, /tmp/secret.txt becomes /home/daytona/tmp/secret.txt
-        sandbox_instance.config.filesystem.allowed_directories = ["/home/daytona"]
-        # This "passes" because /tmp/secret.txt becomes /home/daytona/tmp/secret.txt
+        # Even with only /workspace allowed, /tmp/secret.txt becomes /workspace/tmp/secret.txt
+        sandbox_instance.config.filesystem.allowed_directories = ["/workspace"]
+        # This "passes" because /tmp/secret.txt becomes /workspace/tmp/secret.txt
         assert sandbox_instance.validate_path("/tmp/secret.txt") is True
         # The normalized path is within allowed directory
-        assert sandbox_instance.normalize_path("/tmp/secret.txt") == "/home/daytona/tmp/secret.txt"
+        assert sandbox_instance.normalize_path("/tmp/secret.txt") == "/workspace/tmp/secret.txt"
 
     def test_validate_when_disabled(self, sandbox_instance):
         """All paths are valid when validation is disabled."""
@@ -109,7 +109,7 @@ class TestPathNormalizationEdgeCases:
         The current implementation doesn't resolve .. components.
         This is actually safer - let the sandbox filesystem handle resolution.
         """
-        result = sandbox_instance.normalize_path("/home/daytona/data/../test.py")
+        result = sandbox_instance.normalize_path("/workspace/data/../test.py")
         # Path keeps the .. component (no resolution)
         assert "test.py" in result
 

@@ -5,7 +5,6 @@ This example shows how to create and run a PTC agent programmatically
 with MCP server configuration for additional tool capabilities.
 
 REQUIRED ENVIRONMENT VARIABLES:
-- DAYTONA_API_KEY: Your Daytona API key (get from https://app.daytona.io)
 - ANTHROPIC_API_KEY: Your Anthropic API key (or other LLM provider key)
 
 OPTIONAL (for MCP servers):

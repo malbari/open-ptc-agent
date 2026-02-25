@@ -25,11 +25,11 @@ def mock_core_config():
     """
     config = Mock()
     config.filesystem = Mock()
-    config.filesystem.working_directory = "/home/daytona"
-    config.filesystem.allowed_directories = ["/home/daytona", "/tmp"]
+    config.filesystem.working_directory = "/workspace"
+    config.filesystem.allowed_directories = ["/workspace", "/tmp"]
     config.filesystem.enable_path_validation = True
     config.sandbox = Mock()
-    config.sandbox.working_directory = "/home/daytona"
+    config.sandbox.working_directory = "/workspace"
     config.sandbox.python_version = "3.12"
     config.sandbox.auto_install_dependencies = True
     config.mcp = Mock()
@@ -113,11 +113,11 @@ def mock_sandbox(mock_core_config):
     sandbox.sandbox = None
     sandbox.mcp_registry = None
     sandbox.tool_generator = None
-    sandbox._work_dir = "/home/daytona"
+    sandbox._work_dir = "/workspace"
 
     # Path operations
-    sandbox.normalize_path = Mock(side_effect=lambda x: x if x else "/home/daytona")
-    sandbox.virtualize_path = Mock(side_effect=lambda x: x.replace("/home/daytona", "") or "/")
+    sandbox.normalize_path = Mock(side_effect=lambda x: x if x else "/workspace")
+    sandbox.virtualize_path = Mock(side_effect=lambda x: x.replace("/workspace", "") or "/")
     sandbox.validate_path = Mock(return_value=True)
 
     # File operations (sync methods - called via asyncio.to_thread())
@@ -149,7 +149,7 @@ def sandbox_instance(mock_core_config):
     sandbox.sandbox = None
     sandbox.mcp_registry = None
     sandbox.tool_generator = None
-    sandbox._work_dir = "/home/daytona"
+    sandbox._work_dir = "/workspace"
     return sandbox
 
 

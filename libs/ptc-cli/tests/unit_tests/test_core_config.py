@@ -60,24 +60,6 @@ class TestFindProjectRoot:
 class TestSettingsFromEnvironment:
     """Test Settings.from_environment class method."""
 
-    def test_detects_daytona_api_key(self, temp_project, monkeypatch):
-        """Test detects DAYTONA_API_KEY from environment."""
-        from ptc_cli.core.config import Settings
-
-        monkeypatch.setenv("DAYTONA_API_KEY", "test-api-key-123")
-        settings = Settings.from_environment(start_path=temp_project)
-
-        assert settings.daytona_api_key == "test-api-key-123"
-
-    def test_no_api_key_returns_none(self, temp_project, monkeypatch):
-        """Test returns None when no API key is set."""
-        from ptc_cli.core.config import Settings
-
-        monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
-        settings = Settings.from_environment(start_path=temp_project)
-
-        assert settings.daytona_api_key is None
-
     def test_detects_project_root(self, temp_project):
         """Test detects project root from start_path."""
         from ptc_cli.core.config import Settings
@@ -153,19 +135,6 @@ class TestSettingsPathMethods:
 
 class TestSettingsProperties:
     """Test Settings properties."""
-
-    def test_has_daytona_true(self, settings_with_project):
-        """Test has_daytona returns True when API key is set."""
-        assert settings_with_project.has_daytona is True
-
-    def test_has_daytona_false(self, settings_no_project, monkeypatch):
-        """Test has_daytona returns False when API key is not set."""
-        from ptc_cli.core.config import Settings
-
-        monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
-        settings = Settings(daytona_api_key=None, project_root=None)
-
-        assert settings.has_daytona is False
 
     def test_has_project_true(self, settings_with_project):
         """Test has_project returns True when in a project."""

@@ -162,7 +162,7 @@ async def _handle_files_command(session: _SessionManager | None, *, show_all: bo
     except SandboxRecoveryError:
         return
 
-    # Normalize paths first (remove /home/daytona/ prefix)
+    # Normalize paths first (remove /workspace/ prefix)
     normalized_files = [_normalize_path(f) for f in files]
 
     if not show_all:

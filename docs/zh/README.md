@@ -175,7 +175,7 @@ tavily: Web search engine for finding current information
 
 **在沙箱中** - 生成完整的 Python 模块：
 ```
-/home/daytona/
+/workspace/
 ├── tools/
 │   ├── mcp_client.py      # MCP 通信层
 │   ├── tavily.py          # from tools.tavily import search
@@ -254,7 +254,7 @@ Claude 激活此 Skill 时遵循的指令、工作流和示例。
 - 指南 2
 ```
 
-可以在 `SKILL.md` 旁边捆绑其他文件（如 `reference.md`、脚本），并根据需要引用。Skills 会上传到沙箱的 `/home/daytona/skills/<skill-name>/` 目录。
+可以在 `SKILL.md` 旁边捆绑其他文件（如 `reference.md`、脚本），并根据需要引用。Skills 会上传到沙箱的 `/workspace/skills/<skill-name>/` 目录。
 
 详细指南请参阅 [Anthropic 的 Skill 编写最佳实践](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)。
 
@@ -287,11 +287,7 @@ OPENAI_API_KEY=your-key
 # 或
 # 在 llms.json 和 config.yaml 中配置的任何模型
 # 也可以在这里使用 Minimax 和 GLM 的 Coding 计划！
-
-# Daytona（必需）
-DAYTONA_API_KEY=your-key
 ```
-从 [Daytona Dashboard](https://app.daytona.io/dashboard/keys) 获取您的 Daytona API 密钥。新用户可获得免费额度！
 
 ### 扩展配置
 
@@ -417,7 +413,6 @@ ptc-agent list               # 列出可用的 Agent
 **框架和基础设施**
 
 - [LangChain DeepAgents](https://github.com/langchain-ai/deepagents) - 基础 Agent 框架
-- [Daytona](https://www.daytona.io/) - 沙箱基础设施
 
 ## Star 历史
 

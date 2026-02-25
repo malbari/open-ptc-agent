@@ -337,7 +337,7 @@ class TestGetSessionConfigHash:
 
         # Modify config
         core_config = mock_agent_config.to_core_config()
-        core_config.daytona.python_version = "3.12"
+        core_config.sandbox.python_version = "3.12"
 
         # Get hash with modified config
         hash2 = get_session_config_hash(mock_agent_config)
@@ -352,11 +352,11 @@ class TestGetSessionConfigHash:
         # Create config with MCP servers
         config1 = Mock()
         core_config1 = Mock()
-        core_config1.daytona = Mock()
-        core_config1.daytona.base_url = "https://api.daytona.io"
-        core_config1.daytona.python_version = "3.11"
-        core_config1.daytona.snapshot_enabled = False
-        core_config1.daytona.snapshot_name = None
+        core_config.sandbox = Mock()
+        core_config.sandbox.working_directory = "/workspace"
+        core_config.sandbox.python_version = "3.11"
+        core_config.sandbox
+        core_config.sandbox
 
         # No MCP servers
         core_config1.mcp = Mock()
@@ -366,11 +366,11 @@ class TestGetSessionConfigHash:
         # Create config with different MCP servers
         config2 = Mock()
         core_config2 = Mock()
-        core_config2.daytona = Mock()
-        core_config2.daytona.base_url = "https://api.daytona.io"
-        core_config2.daytona.python_version = "3.11"
-        core_config2.daytona.snapshot_enabled = False
-        core_config2.daytona.snapshot_name = None
+        core_config.sandbox = Mock()
+        core_config.sandbox.working_directory = "/workspace"
+        core_config.sandbox.python_version = "3.11"
+        core_config.sandbox
+        core_config.sandbox
 
         # With MCP server
         mcp_server = Mock()
@@ -397,11 +397,11 @@ class TestGetSessionConfigHash:
         # Create config without snapshot
         config1 = Mock()
         core_config1 = Mock()
-        core_config1.daytona = Mock()
-        core_config1.daytona.base_url = "https://api.daytona.io"
-        core_config1.daytona.python_version = "3.11"
-        core_config1.daytona.snapshot_enabled = False
-        core_config1.daytona.snapshot_name = None
+        core_config.sandbox = Mock()
+        core_config.sandbox.working_directory = "/workspace"
+        core_config.sandbox.python_version = "3.11"
+        core_config.sandbox
+        core_config.sandbox
         core_config1.mcp = Mock()
         core_config1.mcp.servers = []
         config1.to_core_config.return_value = core_config1
@@ -409,11 +409,11 @@ class TestGetSessionConfigHash:
         # Create config with snapshot
         config2 = Mock()
         core_config2 = Mock()
-        core_config2.daytona = Mock()
-        core_config2.daytona.base_url = "https://api.daytona.io"
-        core_config2.daytona.python_version = "3.11"
-        core_config2.daytona.snapshot_enabled = True
-        core_config2.daytona.snapshot_name = "my-snapshot"
+        core_config.sandbox = Mock()
+        core_config.sandbox.working_directory = "/workspace"
+        core_config.sandbox.python_version = "3.11"
+        core_config.sandbox
+        core_config.sandbox
         core_config2.mcp = Mock()
         core_config2.mcp.servers = []
         config2.to_core_config.return_value = core_config2

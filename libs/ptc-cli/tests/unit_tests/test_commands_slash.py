@@ -19,9 +19,9 @@ class TestNormalizePath:
     """Test path normalization."""
 
     def test_removes_home_prefix(self):
-        """Test that /home/daytona/ prefix is removed."""
-        assert _normalize_path("/home/daytona/test.py") == "test.py"
-        assert _normalize_path("/home/daytona/src/main.py") == "src/main.py"
+        """Test that /workspace/ prefix is removed."""
+        assert _normalize_path("/workspace/test.py") == "test.py"
+        assert _normalize_path("/workspace/src/main.py") == "src/main.py"
 
     def test_preserves_other_paths(self):
         """Test that other paths are unchanged."""
@@ -79,8 +79,8 @@ class TestHandleFilesCommand:
     async def test_lists_files(self, mock_session):
         """Test /files lists sandbox files."""
         mock_session.sandbox.glob_files.return_value = [
-            "/home/daytona/test.py",
-            "/home/daytona/src/main.py",
+            "/workspace/test.py",
+            "/workspace/src/main.py",
         ]
         with patch("ptc_cli.commands.slash.console") as mock_console:
             await _handle_files_command(mock_session, show_all=False)
@@ -91,9 +91,9 @@ class TestHandleFilesCommand:
     async def test_filters_excluded_dirs(self, mock_session):
         """Test /files filters system directories."""
         mock_session.sandbox.glob_files.return_value = [
-            "/home/daytona/test.py",
-            "/home/daytona/code/internal.py",
-            "/home/daytona/tools/tool.py",
+            "/workspace/test.py",
+            "/workspace/code/internal.py",
+            "/workspace/tools/tool.py",
         ]
         with patch("ptc_cli.commands.slash.console") as mock_console:
             await _handle_files_command(mock_session, show_all=False)
@@ -104,8 +104,8 @@ class TestHandleFilesCommand:
     async def test_show_all_includes_system_dirs(self, mock_session):
         """Test /files all includes system directories."""
         mock_session.sandbox.glob_files.return_value = [
-            "/home/daytona/test.py",
-            "/home/daytona/code/internal.py",
+            "/workspace/test.py",
+            "/workspace/code/internal.py",
         ]
         with patch("ptc_cli.commands.slash.console") as mock_console:
             await _handle_files_command(mock_session, show_all=True)

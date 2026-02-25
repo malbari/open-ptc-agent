@@ -207,7 +207,7 @@ config = AgentConfig.create(
 config = AgentConfig.create(
     llm=llm,
     # Sandbox settings
-    working_directory="/home/daytona",
+    working_directory="/workspace",
     python_version="3.12",
     auto_install_dependencies=True,
 

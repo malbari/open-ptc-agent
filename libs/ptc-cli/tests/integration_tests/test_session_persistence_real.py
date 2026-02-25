@@ -44,11 +44,8 @@ def fake_home_with_config(tmp_path, monkeypatch):
     # Create minimal config.yaml with all required fields
     config_data = {
         "llm": {"name": "claude-sonnet-4-5"},
-        "daytona": {
-            "base_url": "https://app.daytona.io/api",
-            "auto_stop_interval": 3600,
-            "auto_archive_interval": 86400,
-            "auto_delete_interval": 604800,
+        "sandbox": {
+            "working_directory": "/workspace",
             "python_version": "3.12",
         },
         "security": {
@@ -67,8 +64,8 @@ def fake_home_with_config(tmp_path, monkeypatch):
         },
         "logging": {"level": "WARNING", "file": "logs/test.log"},
         "filesystem": {
-            "working_directory": "/home/daytona",
-            "allowed_directories": ["/home/daytona", "/tmp"],
+            "working_directory": "/workspace",
+            "allowed_directories": ["/workspace", "/tmp"],
             "enable_path_validation": True,
         },
     }
