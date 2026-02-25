@@ -404,7 +404,10 @@ class MCPServerConnector:
             response = await self._http_client.post(
                 self._http_url,
                 json=request,
-                headers={"Content-Type": "application/json"}
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                }
             )
             response.raise_for_status()
             result = response.json()
@@ -464,7 +467,10 @@ class MCPServerConnector:
         response = await self._http_client.post(
             self._http_url,
             json=request,
-            headers={"Content-Type": "application/json"}
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            }
         )
         response.raise_for_status()
         result = response.json()
