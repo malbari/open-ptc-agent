@@ -28,7 +28,7 @@ logger = structlog.get_logger(__name__)
 class LocalBackend:
     """deepagents backend implementation backed by local `PTCSandbox`."""
 
-    def __init__(self, sandbox: PTCSandbox, root_dir: str = "/home/daytona", *, virtual_mode: bool = True) -> None:
+    def __init__(self, sandbox: PTCSandbox, root_dir: str = "/workspace", *, virtual_mode: bool = True) -> None:
         """Create a new LocalBackend.
 
         Args:
@@ -57,7 +57,7 @@ class LocalBackend:
         path = path.strip()
 
         # Already absolute in allowed directories
-        if path.startswith(("/home/daytona", "/tmp")):
+        if path.startswith(("/workspace", "/tmp")):
             return path
 
         if path.startswith("/"):

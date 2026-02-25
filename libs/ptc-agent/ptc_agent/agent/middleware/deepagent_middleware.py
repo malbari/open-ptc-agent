@@ -47,7 +47,7 @@ def create_deepagent_middleware(
         tools: List of tools for the agent
         subagents: List of subagent configurations
         backend: LocalBackend instance for FilesystemMiddleware
-        skill_sources: List of sandbox paths to skill directories (e.g., ["/home/daytona/skills/user"])
+        skill_sources: List of sandbox paths to skill directories (e.g., ["/workspace/skills/user"])
         custom_middleware: Additional middleware to append (e.g., ViewImageMiddleware)
         max_tokens_before_summary: Token threshold for summarization (default: 170000)
         messages_to_keep: Messages to preserve during summarization (default: 6)

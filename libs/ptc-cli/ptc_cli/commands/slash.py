@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
 # Directories to exclude by default (system/internal dirs)
 EXCLUDED_DIRS = {"code", "tools", "mcp_servers"}
-HOME_PREFIX = "/home/daytona/"
+HOME_PREFIX = "/workspace/"
 
 
 class SandboxRecoveryError(Exception):
@@ -69,7 +69,7 @@ class SandboxRecoveryError(Exception):
 
 
 def _normalize_path(path: str) -> str:
-    """Remove /home/daytona/ prefix for cleaner display."""
+    """Remove /workspace/ prefix for cleaner display."""
     if path.startswith(HOME_PREFIX):
         return path[len(HOME_PREFIX):]
     return path
@@ -655,7 +655,7 @@ async def handle_command(
                 # Use find -delete to avoid glob expansion issues with set -e
                 for dir_name in dirs_to_clear:
                     await sandbox.execute_bash_command(  # type: ignore[union-attr]
-                        f"find /home/daytona/{dir_name} -mindepth 1 -delete 2>/dev/null || true"
+                        f"find /workspace/{dir_name} -mindepth 1 -delete 2>/dev/null || true"
                     )
                 return True
 

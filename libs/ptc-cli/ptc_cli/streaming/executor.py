@@ -924,8 +924,8 @@ async def execute_task(  # noqa: PLR0911  # pyright: ignore[reportGeneralTypeIss
             try:
                 sandbox = await session.get_sandbox()
                 files = await sandbox.aglob_files("**/*", path=".")
-                # Normalize paths (remove /home/daytona/ prefix)
-                home_prefix = "/home/daytona/"
+                # Normalize paths (remove /workspace/ prefix)
+                home_prefix = "/workspace/"
                 normalized = [f.removeprefix(home_prefix) for f in files]
                 sandbox_completer.set_files(normalized)
             except Exception:  # noqa: S110, BLE001

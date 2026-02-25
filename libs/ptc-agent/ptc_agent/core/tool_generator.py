@@ -410,7 +410,7 @@ except ImportError:
                     env_dict = "{" + ", ".join(env_items) + "}"
 
                 # Transform Python MCP servers for sandbox execution
-                # uv run python mcp_servers/xxx.py -> uv run python /home/daytona/mcp_servers/xxx.py
+                # uv run python mcp_servers/xxx.py -> uv run python /workspace/mcp_servers/xxx.py
                 command = server.command
                 args = list(server.args)
 
@@ -420,7 +420,7 @@ except ImportError:
                     filename = Path(local_path).name
                     # Keep uv run, just fix the path to sandbox
                     command = "uv"
-                    args = ["run", "python", f"/home/daytona/mcp_servers/{filename}"]
+                    args = ["run", "python", f"/workspace/mcp_servers/{filename}"]
                     logger.info(
                         "Transformed MCP server command for sandbox",
                         server=server.name,

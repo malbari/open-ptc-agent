@@ -50,7 +50,7 @@ def create_glob_tool(sandbox: Any) -> BaseTool:
                 logger.info("No files found", pattern=pattern, path=search_path)
                 return f"No files matching pattern '{pattern}' found in '{search_path}'"
 
-            # Virtualize paths in output (strip /home/daytona prefix)
+            # Virtualize paths in output (strip /workspace prefix)
             virtual_matches = [sandbox.virtualize_path(m) for m in matches]
 
             # Format output with virtual paths

@@ -71,23 +71,16 @@ llm:
 
 ---
 
-### Daytona 沙箱
+### 本地沙箱 (ipybox)
 
 ```yaml
-daytona:
-  base_url: "https://app.daytona.io/api"
-  auto_stop_interval: 3600      # 1 小时 - 沙箱在不活动后自动停止
-  auto_archive_interval: 86400  # 24 小时 - 沙箱归档
-  auto_delete_interval: 604800  # 7 天 - 沙箱删除
-  python_version: "3.12"
-
-  # 快照配置（推荐用于更快启动）
-  snapshot_enabled: true        # 使用快照实现 7 倍更快初始化
-  snapshot_name: "open-ptc-v1"  # 基础名称（自动附加哈希值）
-  snapshot_auto_create: true    # 如果缺失则创建快照
+sandbox:
+  working_directory: "/workspace"  # 默认工作目录
+  python_version: "3.12"              # Python 版本
+  auto_install_dependencies: true     # 自动安装缺失的包
 ```
 
-**快照**：首次创建沙箱需要约 10-15 分钟来安装依赖。启用快照后，后续沙箱初始化仅需约 8 秒。
+**本地执行**：代码使用 ipybox 的 IPython 内核在本地执行。不需要远程 API 或外部沙箱服务。内核在执行之间保持状态，允许迭代开发。
 
 ---
 
@@ -216,9 +209,9 @@ args: ["run", "python", "/path/to/my_server.py"]
 
 ```yaml
 filesystem:
-  working_directory: "/home/daytona"  # 沙箱根目录
+  working_directory: "/workspace"  # 沙箱根目录
   allowed_directories:
-    - "/home/daytona"
+    - "/workspace"
     - "/tmp"
   enable_path_validation: true        # 根据允许列表验证路径
 ```
@@ -510,10 +503,6 @@ DAYTONA_API_KEY=your-key
 ```yaml
 llm:
   name: "claude-opus-4-5"
-
-daytona:
-  snapshot_enabled: true
-  snapshot_name: "ptc-full-v1"
 
 mcp:
   servers:

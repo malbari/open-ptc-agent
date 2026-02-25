@@ -441,7 +441,7 @@ def load_from_dict(
         enabled=skills_data.get("enabled", True),
         user_skills_dir=skills_data.get("user_skills_dir", "~/.ptc-agent/skills"),
         project_skills_dir=skills_data.get("project_skills_dir", ".ptc-agent/skills"),
-        sandbox_skills_base=skills_data.get("sandbox_skills_base", "/home/daytona/skills"),
+        sandbox_skills_base=skills_data.get("sandbox_skills_base", "/workspace/skills"),
     )
 
     # Create config object
@@ -557,7 +557,7 @@ llm:
 # Sandbox Configuration (local execution with ipybox)
 # ---------------------------------------------------
 sandbox:
-  working_directory: "/home/daytona"
+  working_directory: "/workspace"
   python_version: "3.12"
   auto_install_dependencies: true
 
@@ -599,9 +599,9 @@ logging:
 # Filesystem
 # ----------
 filesystem:
-  working_directory: "/home/daytona"
+  working_directory: "/workspace"
   allowed_directories:
-    - "/home/daytona"
+    - "/workspace"
     - "/tmp"
   enable_path_validation: true
 

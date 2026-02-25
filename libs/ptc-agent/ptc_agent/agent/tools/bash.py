@@ -24,7 +24,7 @@ def create_execute_bash_tool(sandbox: Any) -> BaseTool:
         description: str | None = None,
         timeout: int | None = 120000,
         run_in_background: bool | None = False,
-        working_dir: str | None = "/home/daytona",
+        working_dir: str | None = "/workspace",
     ) -> str:
         """Execute bash commands in a persistent shell session.
 
@@ -36,12 +36,12 @@ def create_execute_bash_tool(sandbox: Any) -> BaseTool:
             description: Brief description (5-10 words, active voice)
             timeout: Milliseconds (default: 120000, max: 600000)
             run_in_background: Run asynchronously (default: False)
-            working_dir: Working directory (default: /home/daytona)
+            working_dir: Working directory (default: /workspace)
 
         Returns:
             Command output (stdout/stderr), or ERROR message
 
-        Paths: Quote paths with spaces. Use /home/daytona/ for workspace files.
+        Paths: Quote paths with spaces. Use /workspace/ for workspace files.
         """
         try:
             logger.info(

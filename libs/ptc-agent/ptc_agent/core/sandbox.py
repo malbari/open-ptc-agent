@@ -1028,11 +1028,11 @@ class PTCSandbox:
             if path.startswith(allowed_dir):
                 return str(Path(path))
 
-        # Virtual absolute path: /foo -> /home/daytona/foo
+        # Virtual absolute path: /foo -> /workspace/foo
         if path.startswith("/"):
             return str(Path(f"{work_dir}{path}"))
 
-        # Relative path: foo -> /home/daytona/foo
+        # Relative path: foo -> /workspace/foo
         return str(Path(f"{work_dir}/{path}"))
 
     def virtualize_path(self, path: str) -> str:

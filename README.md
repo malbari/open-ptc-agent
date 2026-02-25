@@ -52,7 +52,6 @@ User Task
 
 > **Built on [LangChain DeepAgents](https://github.com/langchain-ai/deepagents)** - This project uses many components from DeepAgents and cli feature was bootstrapped from deepagent-cli. Special thanks to the LangChain team!
 
-> **Sandbox environment provided by [Daytona](https://www.daytona.io/)**.
 ## What's New
 
 - **Interactive CLI** - New `ptc-agent` command for terminal-based interaction with session persistence, plan mode, themes, and rich UI
@@ -176,7 +175,7 @@ tavily: Web search engine for finding current information
 
 **In Sandbox** - Full Python modules are generated:
 ```
-/home/daytona/
+/workspace/
 ├── tools/
 │   ├── mcp_client.py      # MCP communication layer
 │   ├── tavily.py          # from tools.tavily import search
@@ -255,7 +254,7 @@ Instructions, workflows, and examples that Claude follows when this skill is act
 - Guideline 2
 ```
 
-Additional files (e.g., `reference.md`, scripts) can be bundled alongside `SKILL.md` and referenced as needed. Skills are uploaded to the sandbox at `/home/daytona/skills/<skill-name>/`.
+Additional files (e.g., `reference.md`, scripts) can be bundled alongside `SKILL.md` and referenced as needed. Skills are uploaded to the sandbox at `/workspace/skills/<skill-name>/`.
 
 For detailed guidance, see [Anthropic's skill authoring best practices](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills).
 
@@ -288,11 +287,7 @@ OPENAI_API_KEY=your-key
 # or
 # Any model you configured in llms.json and config.yaml
 # You can also use Coding plans from Minimax and GLM here!
-
-# Daytona (required)
-DAYTONA_API_KEY=your-key
 ```
-Get your Daytona API key from [Daytona Dashboard](https://app.daytona.io/dashboard/keys). They provide free credits for new users!
 
 ### Extended Configuration
 
@@ -418,7 +413,6 @@ This project builds on research and tools from:
 **Frameworks and Infrastructure**
 
 - [LangChain DeepAgents](https://github.com/langchain-ai/deepagents) - Base Agent Framework
-- [Daytona](https://www.daytona.io/) - Sandbox infrastructure
 
 ## Star History
 

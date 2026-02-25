@@ -335,7 +335,7 @@ async def simple_cli(
         sandbox = await session.get_sandbox()
         if sandbox is not None:
             files = await sandbox.aglob_files("**/*", path=".")
-            home_prefix = "/home/daytona/"
+            home_prefix = "/workspace/"
             normalized = [f.removeprefix(home_prefix) for f in files]
             sandbox_completer.set_files(normalized)
 

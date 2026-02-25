@@ -52,8 +52,6 @@ User Task
 
 > **基于 [LangChain DeepAgents](https://github.com/langchain-ai/deepagents) 构建** - 本项目使用了 DeepAgents 的许多组件，CLI 功能基于 deepagent-cli 启动。特别感谢 LangChain 团队！
 
-> **沙箱环境由 [Daytona](https://www.daytona.io/) 提供**。
-
 ## 最新更新
 
 - **交互式 CLI** - 新增 `ptc-agent` 命令，提供基于终端的交互界面，支持沙盒持久化、Plan模式、主题，和快捷切换模型

@@ -167,11 +167,7 @@ class Settings:
 
     Attributes:
         project_root: Current project root directory (if in a git project)
-        daytona_api_key: Daytona API key if available
     """
-
-    # API keys
-    daytona_api_key: str | None
 
     # Project information
     project_root: Path | None
@@ -186,21 +182,12 @@ class Settings:
         Returns:
             Settings instance with detected configuration
         """
-        # Detect API keys
-        daytona_key = os.environ.get("DAYTONA_API_KEY")
-
         # Detect project
         project_root = _find_project_root(start_path)
 
         return cls(
-            daytona_api_key=daytona_key,
             project_root=project_root,
         )
-
-    @property
-    def has_daytona(self) -> bool:
-        """Check if Daytona API key is configured."""
-        return self.daytona_api_key is not None
 
     @property
     def has_project(self) -> bool:

@@ -1,6 +1,6 @@
 # Workspace Structure
 
-Working directory: `/home/daytona`
+Working directory: `/workspace`
 
 ## Standard Directories
 
@@ -25,13 +25,13 @@ file_path = "results/report.md"    # Correct
 file_path = "config.yaml"          # Correct
 ```
 
-**Bash tool** - Use ABSOLUTE paths (working_dir is `/home/daytona`):
+**Bash tool** - Use ABSOLUTE paths (working_dir is `/workspace`):
 ```bash
-ls /home/daytona/results/          # Correct
-cat /home/daytona/data/output.json # Correct
+ls /workspace/results/          # Correct
+cat /workspace/data/output.json # Correct
 ls results/                        # Also works (relative to working_dir)
 ```
 
 **NEVER use these path patterns**:
-- `/workspace/...` - Wrong prefix, becomes `/home/daytona/workspace/...`
+- `/home/...` - Wrong prefix, becomes `/workspace/home/...`
 - Absolute paths starting with `/results/` or `/data/` in Bash - these don't exist at root level

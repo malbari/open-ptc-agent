@@ -27,16 +27,16 @@ async def check_sandbox_health(session: "Session") -> bool:
         return False
 
     try:
-        # Get the underlying Daytona sandbox object
-        daytona_sandbox = getattr(session.sandbox, "sandbox", None)
-        if daytona_sandbox is None:
+        # Get the underlying sandbox object
+        sandbox_obj = getattr(session.sandbox, "sandbox", None)
+        if sandbox_obj is None:
             return False
 
-        # Refresh state from Daytona API (no side effects)
-        await asyncio.to_thread(daytona_sandbox.refresh_data)
+        # Refresh state from API (no side effects)
+        await asyncio.to_thread(sandbox_obj.refresh_data)
 
-        # Check state - Daytona uses 'started' not 'running'
-        state = daytona_sandbox.state
+        # Check state
+        state = sandbox_obj.state
         if hasattr(state, "value"):
             state = state.value
 

@@ -156,7 +156,7 @@ def create_sandbox_config(data: dict[str, Any] | None = None) -> SandboxConfig:
         return SandboxConfig()
 
     return SandboxConfig(
-        working_directory=data.get("working_directory", "/home/daytona"),
+        working_directory=data.get("working_directory", "/workspace"),
         python_version=data.get("python_version", "3.12"),
         auto_install_dependencies=data.get("auto_install_dependencies", True),
     )
@@ -237,7 +237,7 @@ def create_filesystem_config(data: dict[str, Any]) -> FilesystemConfig:
 
     validate_section_fields(data, FILESYSTEM_REQUIRED_FIELDS, "filesystem")
     return FilesystemConfig(
-        working_directory=data.get("working_directory", "/home/daytona"),
+        working_directory=data.get("working_directory", "/workspace"),
         allowed_directories=data["allowed_directories"],
         enable_path_validation=data.get("enable_path_validation", True),
     )

@@ -40,7 +40,7 @@ class SkillsConfig(BaseModel):
     enabled: bool = True
     user_skills_dir: str = "~/.ptc-agent/skills"
     project_skills_dir: str = ".ptc-agent/skills"
-    sandbox_skills_base: str = "/home/daytona/skills"  # Where skills live in sandbox
+    sandbox_skills_base: str = "/workspace/skills"  # Where skills live in sandbox
 
     def local_skill_dirs_with_sandbox(self, *, cwd: Path | None = None) -> list[tuple[str, str]]:
         """Return ordered (local_dir, sandbox_dir) sources.
@@ -142,7 +142,7 @@ class AgentConfig(BaseModel):
             llm: A LangChain chat model instance (e.g., ChatAnthropic, ChatOpenAI)
 
         Optional - Sandbox:
-            working_directory: Working directory for local execution (default: "/home/daytona")
+            working_directory: Working directory for local execution (default: "/workspace")
             python_version: Python version (default: "3.12")
             auto_install_dependencies: Auto-install missing packages (default: True)
 
@@ -157,7 +157,7 @@ class AgentConfig(BaseModel):
 
         Optional - Other:
             log_level: Logging level (default: "INFO")
-            allowed_directories: Sandbox paths (default: ["/home/daytona", "/tmp"])
+            allowed_directories: Sandbox paths (default: ["/workspace", "/tmp"])
             subagents_enabled: Subagent names (default: ["general-purpose"])
             use_custom_filesystem_tools: Use Read/Write/Edit tools (default: True)
             enable_view_image: Enable image viewing (default: True)
@@ -194,7 +194,7 @@ class AgentConfig(BaseModel):
 
         # Create Sandbox config with defaults
         sandbox_config = SandboxConfig(
-            working_directory=kwargs.pop("working_directory", "/home/daytona"),
+            working_directory=kwargs.pop("working_directory", "/workspace"),
             python_version=kwargs.pop("python_version", "3.12"),
             auto_install_dependencies=kwargs.pop("auto_install_dependencies", True),
         )
@@ -230,8 +230,8 @@ class AgentConfig(BaseModel):
 
         # Create Filesystem config
         filesystem_config = FilesystemConfig(
-            working_directory=kwargs.pop("working_directory", "/home/daytona"),
-            allowed_directories=allowed_directories or ["/home/daytona", "/tmp"],
+            working_directory=kwargs.pop("working_directory", "/workspace"),
+            allowed_directories=allowed_directories or ["/workspace", "/tmp"],
             enable_path_validation=kwargs.pop("enable_path_validation", True),
         )
 
@@ -240,7 +240,7 @@ class AgentConfig(BaseModel):
             enabled=kwargs.pop("skills_enabled", True),
             user_skills_dir=kwargs.pop("user_skills_dir", "~/.ptc-agent/skills"),
             project_skills_dir=kwargs.pop("project_skills_dir", ".ptc-agent/skills"),
-            sandbox_skills_base=kwargs.pop("sandbox_skills_base", "/home/daytona/skills"),
+            sandbox_skills_base=kwargs.pop("sandbox_skills_base", "/workspace/skills"),
         )
 
         # Create the config

@@ -75,7 +75,7 @@ Available options depend on what's defined in `llms.json`. Pre-configured models
 
 ```yaml
 sandbox:
-  working_directory: "/home/daytona"  # Default working directory
+  working_directory: "/workspace"  # Default working directory
   python_version: "3.12"              # Python version for execution
   auto_install_dependencies: true     # Auto-install missing packages
 ```
@@ -215,9 +215,9 @@ args: ["run", "python", "/path/to/my_server.py"]
 
 ```yaml
 filesystem:
-  working_directory: "/home/daytona"  # Sandbox root directory
+  working_directory: "/workspace"  # Sandbox root directory
   allowed_directories:
-    - "/home/daytona"
+    - "/workspace"
     - "/tmp"
   enable_path_validation: true        # Validate paths against allowed list
 ```
@@ -509,10 +509,6 @@ DAYTONA_API_KEY=your-key
 ```yaml
 llm:
   name: "claude-opus-4-5"
-
-daytona:
-  snapshot_enabled: true
-  snapshot_name: "ptc-full-v1"
 
 mcp:
   servers:

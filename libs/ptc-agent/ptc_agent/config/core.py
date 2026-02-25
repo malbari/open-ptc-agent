@@ -22,7 +22,7 @@ class SandboxConfig(BaseModel):
     All fields have sensible defaults for local execution.
     """
 
-    working_directory: str = "/home/daytona"
+    working_directory: str = "/workspace"
     python_version: str = "3.12"
     auto_install_dependencies: bool = True
 
@@ -91,8 +91,8 @@ class FilesystemConfig(BaseModel):
     Defaults to the standard workspace directories for local execution.
     """
 
-    working_directory: str = "/home/daytona"
-    allowed_directories: list[str] = Field(default_factory=lambda: ["/home/daytona", "/tmp"])
+    working_directory: str = "/workspace"
+    allowed_directories: list[str] = Field(default_factory=lambda: ["/workspace", "/tmp"])
     enable_path_validation: bool = True
 
 
