@@ -539,7 +539,7 @@ class PTCSandbox:
             if not server.enabled:
                 continue
             if server.transport != "stdio":
-                logger.warning(
+                logger.debug(
                     f"Skipping non-stdio server {server.name}",
                     transport=server.transport
                 )
