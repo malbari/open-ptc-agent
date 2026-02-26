@@ -1,31 +1,50 @@
 [project]
 name = "open-ptc-agent"
 version = "0.1.0"
-description = "Open PTC Agent Monorepo - Programmatic Tool Calling with MCP"
+description = "Open PTC Agent - Programmatic Tool Calling with MCP"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "ipykernel>=7.1.0",
-    "ptc-agent",
-    "ptc-cli",
+    "ipybox>=0.7.0",
+    "mcp>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "structlog>=24.0.0",
+    "jinja2>=3.1.0",
+    "aiohttp>=3.9.0",
+    "aiofiles>=23.0.0",
+    "Pillow>=9.0.0",
+    "langchain-openai>=1.0.2",
+    "langchain-anthropic>=1.0.3",
+    "langchain_tavily>=0.2.13",
+    "rich>=14.0.0",
+    "tavily-python>=0.5.0",
+    "httpx>=0.28.1",
+    "markdownify>=1.2.0",
+    "deepagents>=0.2.6",
+    "langgraph-cli[inmem]>=0.4.7",
+    "alibabacloud-oss-v2>=1.2.1",
+    "langchain-google-genai>=1.0.0",
+    "tavily>=1.1.0",
+    "yfinance>=0.2.40",
+    "boto3>=1.41.3",
+    "langchain-qwq>=0.3.1",
+    "langchain-deepseek>=1.0.1",
+    "pyyaml>=6.0.0",
 ]
 
-# This is a workspace root - use hatchling to avoid setuptools flat-layout issues
+# This is a workspace root - use hatchling with package-dir mapping
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = []  # No packages at root level
-
-[tool.uv.workspace]
-members = ["libs/*"]
-
-[tool.uv.sources]
-ptc-agent = { workspace = true }
-ptc-cli = { workspace = true }
-ipybox = { path = "/Users/M.Albari/projects/ipybox" }
+packages = ["ptc_agent"]
+[tool.hatch.build.targets.wheel.package-dir]
+ptc_agent = "libs/ptc-agent/ptc_agent"
 
 [dependency-groups]
 dev = [
