@@ -6,6 +6,17 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 
+# Build system - use hatchling to avoid setuptools flat-layout issues
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# No packages at root level - this is a workspace for subdirectory packages
+# Install using: git+https://github.com/malbari/open-ptc-agent.git#subdirectory=libs/ptc-agent
+
+[tool.hatch.build.targets.wheel]
+packages = []
+
 [dependency-groups]
 dev = [
     "mypy>=1.18.2",
