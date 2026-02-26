@@ -625,6 +625,13 @@ class PTCSandbox:
         """
         try:
             logger.info(f"Auto-installing missing package: {package}")
+            # Log current environment for debugging
+            import sys
+            logger.info(
+                "Package installation environment",
+                python_path=sys.executable,
+                venv_prefix=sys.prefix,
+            )
             result = subprocess.run(
                 ["uv", "pip", "install", "-q", package],
                 capture_output=True,
@@ -633,7 +640,11 @@ class PTCSandbox:
             if result.returncode == 0:
                 logger.info(f"Successfully installed package: {package}")
                 return True
-            logger.warning(f"Failed to install package: {package}, exit_code={result.returncode}")
+            logger.warning(
+                f"Failed to install package: {package}, exit_code={result.returncode}",
+                stderr=result.stderr,
+                stdout=result.stdout
+            )
             return False
         except Exception as e:
             logger.warning(f"Failed to install {package}: {e}")
@@ -665,6 +676,7 @@ class PTCSandbox:
             execution_id=execution_id,
             code_hash=code_hash,
             code_length=len(code),
+            code_sample=code[:200] if code else "",
             auto_install=auto_install,
         )
 
@@ -742,6 +754,7 @@ class PTCSandbox:
                         execution_id=execution_id,
                         missing_packages=missing_packages,
                         retries_remaining=max_retries,
+                        error_stderr=stderr[:500],
                     )
 
                     # Install missing packages
