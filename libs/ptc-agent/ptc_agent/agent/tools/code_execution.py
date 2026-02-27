@@ -47,7 +47,7 @@ def create_execute_code_tool(sandbox: Any, mcp_registry: Any) -> BaseTool:
             return "ERROR: Sandbox not initialized"
 
         try:
-            logger.info("Executing code in sandbox", code_length=len(code))
+            logger.info("Executing code in sandbox", code_length=len(code), code_sample=code[:200] if code else "")
 
             # Execute code in sandbox
             result = await sandbox.execute(code)
@@ -159,6 +159,8 @@ def create_execute_code_tool(sandbox: Any, mcp_registry: Any) -> BaseTool:
                 "Code execution failed",
                 stderr_length=len(result.stderr),
                 stdout_length=len(result.stdout),
+                stderr=result.stderr[:500] if result.stderr else "",
+                stdout=result.stdout[:500] if result.stdout else "",
             )
 
             return f"ERROR\n{error_output}"
