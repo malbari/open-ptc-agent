@@ -197,6 +197,13 @@ class PTCSandbox:
         # Initialize ipybox CodeExecutor
         await self._init_code_executor()
 
+        # Create required directories in kernel's working directory
+        try:
+            await self._code_executor.execute("import os; os.makedirs('results', exist_ok=True); os.makedirs('data', exist_ok=True)")
+            logger.info("Created results and data directories in kernel")
+        except Exception as e:
+            logger.warning("Failed to create kernel directories", error=str(e))
+
         logger.info("Sandbox setup complete", sandbox_id=self.sandbox_id)
 
     async def _init_code_executor(self) -> None:

@@ -783,10 +783,27 @@ def _call_mcp_tool_streamable_http(server_name: str, tool_name: str, arguments: 
         }}
 
         # Send request via HTTP POST (stateless, no session needed)
+        # MCP streamable_http returns SSE format
+        headers = {{
+            "Accept": "application/json, text/event-stream"
+        }}
         with httpx.Client(timeout=60.0) as client:
-            response = client.post(url, json=request)
+            response = client.post(url, json=request, headers=headers)
             response.raise_for_status()
-            result = response.json()
+            # Parse SSE response - extract data from "data: {...}" lines
+            response_text = response.text
+            result = None
+            for line in response_text.strip().split('\\n'):
+                line = line.strip()
+                if line.startswith('data: '):
+                    json_str = line[6:]  # Remove 'data: ' prefix
+                    result = json.loads(json_str)
+                    break
+            if result is None:
+                print(f"DEBUG: Raw SSE response: {{response_text}}", file=sys.stderr)  # noqa: T201
+                raise RuntimeError(f"MCP streamable_http response missing data field: {{response_text}}")
+
+        print(f"DEBUG: MCP result: {{result}}", file=sys.stderr)  # noqa: T201
 
         # Check for errors
         if "error" in result:
@@ -798,6 +815,7 @@ def _call_mcp_tool_streamable_http(server_name: str, tool_name: str, arguments: 
         # Return result
         if "result" in result:
             result_data = result["result"]
+            print(f"DEBUG: result_data: {{result_data}}", file=sys.stderr)  # noqa: T201
 
             # Unwrap MCP content format
             if (isinstance(result_data, dict) and
@@ -827,7 +845,7 @@ def _call_mcp_tool_streamable_http(server_name: str, tool_name: str, arguments: 
     except Exception as e:  # noqa: BLE001 - Top-level error handler for MCP tool call
         error_type = type(e).__name__
         error_msg = str(e)
-        print(f"\n{{'='*60}}", file=sys.stderr)  # noqa: T201
+        print(f"\\n{{'='*60}}", file=sys.stderr)  # noqa: T201
         print(f"ERROR in _call_mcp_tool_streamable_http", file=sys.stderr)  # noqa: T201
         print(f"{{'='*60}}", file=sys.stderr)  # noqa: T201
         print(f"Error Type: {{error_type}}", file=sys.stderr)  # noqa: T201
@@ -835,9 +853,9 @@ def _call_mcp_tool_streamable_http(server_name: str, tool_name: str, arguments: 
         print(f"Server: {{server_name}}", file=sys.stderr)  # noqa: T201
         print(f"Tool: {{tool_name}}", file=sys.stderr)  # noqa: T201
         print(f"Arguments: {{arguments}}", file=sys.stderr)  # noqa: T201
-        print(f"\nFull Traceback:", file=sys.stderr)  # noqa: T201
+        print(f"\\nFull Traceback:", file=sys.stderr)  # noqa: T201
         traceback.print_exc(file=sys.stderr)
-        print(f"{{'='*60}}\n", file=sys.stderr)  # noqa: T201
+        print(f"{{'='*60}}\\n", file=sys.stderr)  # noqa: T201
         raise
 
 
