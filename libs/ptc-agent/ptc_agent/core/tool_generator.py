@@ -878,7 +878,7 @@ def _call_mcp_tool(server_name: str, tool_name: str, arguments: dict[str, Any]) 
 
     transport = config.get("transport", "stdio")
 
-    if transport in ("sse", "http"):
+    if transport in ("sse", "http", "streamable_http"):
         return _call_mcp_tool_sse(server_name, tool_name, arguments)
     else:
         return _call_mcp_tool_stdio(server_name, tool_name, arguments)
