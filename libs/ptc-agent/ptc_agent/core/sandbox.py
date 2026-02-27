@@ -496,17 +496,21 @@ class PTCSandbox:
             tools_by_server = self.mcp_registry.get_all_tools()
 
             for server_name, tools in tools_by_server.items():
+                # Convert server name to valid Python module name (replace - with _)
+                module_name = server_name.replace("-", "_")
+
                 # Generate Python module
                 module_code = self.tool_generator.generate_tool_module(
                     server_name, tools
                 )
-                module_path = self._tools_dir / f"{server_name}.py"
+                module_path = self._tools_dir / f"{module_name}.py"
                 async with aiofiles.open(str(module_path), "w") as f:
                     await f.write(module_code)
 
                 logger.info(
                     "Tool module installed",
                     server=server_name,
+                    module_name=module_name,
                     path=str(module_path),
                     tool_count=len(tools),
                 )
@@ -522,7 +526,11 @@ class PTCSandbox:
                         await f.write(doc)
 
         # 3. __init__.py for tools package
-        init_content = '"""Auto-generated tool modules from MCP servers."""\n'
+        init_lines = ['"""Auto-generated tool modules from MCP servers."""\n']
+        for server_name in tools_by_server.keys():
+            module_name = server_name.replace("-", "_")
+            init_lines.append(f"from .{module_name} import *\n")
+        init_content = "\n".join(init_lines)
         init_path = self._tools_dir / "__init__.py"
         async with aiofiles.open(str(init_path), "w") as f:
             await f.write(init_content)

@@ -140,6 +140,9 @@ def _format_server_brief(server_name: str, tools: list, config: Any) -> list:
     tools_word = "tool" if tool_count == 1 else "tools"
     lines = []
 
+    # Convert server name to valid Python module name (replace - with _)
+    module_name = server_name.replace("-", "_")
+
     # Server header with description
     if config and config.description:
         lines.append(f"\n{server_name}: {config.description}")
@@ -150,9 +153,9 @@ def _format_server_brief(server_name: str, tools: list, config: Any) -> list:
     if config and config.instruction:
         lines.append(f"  Instructions: {config.instruction}")
 
-    lines.append(f"  - Module: tools/{server_name}.py")
+    lines.append(f"  - Module: tools/{module_name}.py")
     lines.append(f"  - Tools: {tool_count} {tools_word} available")
-    lines.append(f"  - Import: from tools.{server_name} import <tool_name>")
+    lines.append(f"  - Import: from tools.{module_name} import <tool_name>")
     lines.append(f"  - Documentation: tools/docs/{server_name}/*.md")
 
     return lines
@@ -171,6 +174,9 @@ def _format_server_detailed(server_name: str, tools: list, config: Any) -> list:
     """
     lines = []
 
+    # Convert server name to valid Python module name (replace - with _)
+    module_name = server_name.replace("-", "_")
+
     # Server header with description
     if config and config.description:
         lines.append(f"\n{server_name}: {config.description}")
@@ -181,7 +187,7 @@ def _format_server_detailed(server_name: str, tools: list, config: Any) -> list:
     if config and config.instruction:
         lines.append(f"  Instructions: {config.instruction}")
 
-    lines.append(f"  Module: tools/{server_name}.py")
+    lines.append(f"  Module: tools/{module_name}.py")
     lines.append("  Available tools:")
 
     for tool in tools:
@@ -243,6 +249,9 @@ def _format_tool_summary_brief(
         # Get server config for description/instruction
         config = server_configs.get(server_name) if server_configs else None
 
+        # Convert server name to valid Python module name (replace - with _)
+        module_name = server_name.replace("-", "_")
+
         # Server header with description
         if config and config.description:
             lines.append(f"\n{server_name}: {config.description}")
@@ -253,9 +262,9 @@ def _format_tool_summary_brief(
         if config and config.instruction:
             lines.append(f"  Instructions: {config.instruction}")
 
-        lines.append(f"  - Module: tools/{server_name}.py")
+        lines.append(f"  - Module: tools/{module_name}.py")
         lines.append(f"  - Tools: {tool_count} {tools_word} available")
-        lines.append(f"  - Import: from tools.{server_name} import <tool_name>")
+        lines.append(f"  - Import: from tools.{module_name} import <tool_name>")
         lines.append(f"  - Documentation: tools/docs/{server_name}/*.md")
 
     if not lines:
@@ -288,6 +297,9 @@ def _format_tool_summary_detailed(
         # Get server config for description/instruction
         config = server_configs.get(server_name) if server_configs else None
 
+        # Convert server name to valid Python module name (replace - with _)
+        module_name = server_name.replace("-", "_")
+
         # Server header with description
         if config and config.description:
             lines.append(f"\n{server_name}: {config.description}")
@@ -298,7 +310,7 @@ def _format_tool_summary_detailed(
         if config and config.instruction:
             lines.append(f"  Instructions: {config.instruction}")
 
-        lines.append(f"  Module: tools/{server_name}.py")
+        lines.append(f"  Module: tools/{module_name}.py")
         lines.append("  Available tools:")
 
         for tool in tools:
