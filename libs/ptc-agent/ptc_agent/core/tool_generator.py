@@ -402,6 +402,16 @@ except ImportError:
         "url": "{url}",
     }},
 """
+            elif server.transport == "streamable_http":
+                # Streamable HTTP transport - use URL with streaming support
+                url = server.url or ""
+                # Resolve env vars from host environment
+                url = resolve_env_vars(url)
+                servers_dict += f"""    "{server.name}": {{
+        "transport": "streamable_http",
+        "url": "{url}",
+    }},
+"""
             else:
                 # Stdio transport - use command
                 env_dict = "{}"

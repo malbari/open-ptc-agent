@@ -56,11 +56,11 @@ class MCPServerConfig(BaseModel):
     enabled: bool = True  # Whether this server is enabled (default: True)
     description: str = ""  # What the MCP server does
     instruction: str = ""  # When/how to use this server
-    transport: Literal["stdio", "sse", "http"] = "stdio"
+    transport: Literal["stdio", "sse", "http", "streamable_http"] = "stdio"
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
-    url: str | None = None  # For SSE/HTTP transports
+    url: str | None = None  # For SSE/HTTP/streamable_http transports
     tool_exposure_mode: Literal["summary", "detailed"] | None = None  # Per-server override
 
 

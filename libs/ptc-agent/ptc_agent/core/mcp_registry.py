@@ -10,6 +10,7 @@ import structlog
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 from ptc_agent.config.core import CoreConfig, MCPServerConfig
 
@@ -303,6 +304,36 @@ class MCPServerConnector:
 
                     logger.debug(
                         "MCP SSE connection disconnect signaled",
+                        server=self.config.name,
+                    )
+
+            elif self.config.transport == "streamable_http":
+                # Streamable HTTP transport - use URL-based connection with streaming
+                url = self._expand_url()
+                if not url:
+                    msg = f"URL required for streamable_http transport: {self.config.name}"
+                    raise ValueError(msg)
+
+                async with streamable_http_client(url) as (read_stream, write_stream), ClientSession(read_stream, write_stream) as session:
+                    self.session = session
+
+                    # Initialize and discover tools
+                    await self.session.initialize()
+                    await self._discover_tools()
+
+                    logger.debug(
+                        "MCP streamable_http connection established",
+                        server=self.config.name,
+                    )
+
+                    # Signal that connection is ready
+                    self._ready.set()
+
+                    # Keep contexts alive until disconnect is signaled
+                    await self._disconnect_event.wait()
+
+                    logger.debug(
+                        "MCP streamable_http connection disconnect signaled",
                         server=self.config.name,
                     )
             else:
@@ -657,7 +688,7 @@ class MCPServerConnector:
                             return first["text"]
                 return result
 
-            # SSE/stdio transport uses session
+            # SSE/streamable_http/stdio transport uses session
             if not self.session:
                 raise RuntimeError("Not connected to server")
 
