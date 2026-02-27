@@ -418,6 +418,7 @@ class PTCExecutor:
             Final execution result.
         """
         logger.info("Executing task with deepagent", task=task[:100])
+        print(f"[DEBUG] execute_task called with: {task[:50]}...")
 
         # Create the agent with injected dependencies
         agent = self.agent.create_agent(
@@ -430,10 +431,12 @@ class PTCExecutor:
             recursion_limit = max(max_retries * 5, 15)
 
             # Execute task via deepagent
+            logger.info("Invoking agent with task", task=task[:200])
             agent_result = await agent.ainvoke(
                 {"messages": [("user", task)]},
                 config={"recursion_limit": recursion_limit},
             )
+            logger.info("Agent invocation completed", result_keys=agent_result.keys() if isinstance(agent_result, dict) else "not dict")
 
             return await self._parse_agent_result(agent_result, sandbox)
 

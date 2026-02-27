@@ -48,6 +48,9 @@ def create_execute_code_tool(sandbox: Any, mcp_registry: Any) -> BaseTool:
 
         try:
             logger.info("Executing code in sandbox", code_length=len(code), code_sample=code[:200] if code else "")
+            # Check for MCP tool imports in the code
+            if "from tools." in code and "import" in code:
+                logger.info("MCP tool import detected in code")
 
             # Execute code in sandbox
             result = await sandbox.execute(code)

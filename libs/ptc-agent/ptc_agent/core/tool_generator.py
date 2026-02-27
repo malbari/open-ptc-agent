@@ -120,7 +120,9 @@ except ImportError:
     # Remove None values
     arguments = {{k: v for k, v in arguments.items() if v is not None}}
 
-    return _call_mcp_tool("{server_name}", "{tool.name}", arguments)'''
+    result = _call_mcp_tool("{server_name}", "{tool.name}", arguments)
+    # Wrap result in dict for consistent access pattern (result["result"])
+    return {{"result": result}}'''
 
 
     def _generate_docstring(
