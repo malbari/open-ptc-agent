@@ -744,6 +744,103 @@ def _call_mcp_tool_sse(server_name: str, tool_name: str, arguments: dict[str, An
         raise
 
 
+def _call_mcp_tool_streamable_http(server_name: str, tool_name: str, arguments: dict[str, Any]) -> Any:
+    """Call an MCP tool via streamable_http transport (stateless HTTP).
+
+    Unlike SSE, streamable_http doesn't require initialization.
+
+    Args:
+        server_name: Name of the MCP server
+        tool_name: Name of the tool
+        arguments: Tool arguments
+
+    Returns:
+        Tool result
+    """
+    import traceback
+    import re
+
+    try:
+        config = _SERVER_CONFIGS.get(server_name)
+        url = config.get("url", "")
+
+        # Resolve environment variables in URL
+        def resolve_env(match):
+            var_name = match.group(1)
+            return os.environ.get(var_name, match.group(0))
+
+        url = re.sub(r'\\$\\{{([^}}]+)\\}}', resolve_env, url)
+
+        # Build JSON-RPC request (no initialization needed for streamable_http)
+        request = {{
+            "jsonrpc": "2.0",
+            "id": _get_next_message_id(),
+            "method": "tools/call",
+            "params": {{
+                "name": tool_name,
+                "arguments": arguments
+            }}
+        }}
+
+        # Send request via HTTP POST (stateless, no session needed)
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(url, json=request)
+            response.raise_for_status()
+            result = response.json()
+
+        # Check for errors
+        if "error" in result:
+            error = result["error"]
+            error_msg = f"MCP streamable_http tool call failed: {{error}}"
+            print(f"ERROR: {{error_msg}}", file=sys.stderr)  # noqa: T201
+            raise RuntimeError(error_msg)
+
+        # Return result
+        if "result" in result:
+            result_data = result["result"]
+
+            # Unwrap MCP content format
+            if (isinstance(result_data, dict) and
+                "content" in result_data and
+                isinstance(result_data.get("content"), list)):
+
+                content_blocks = result_data["content"]
+
+                if (len(content_blocks) == 1 and
+                    isinstance(content_blocks[0], dict) and
+                    content_blocks[0].get("type") == "text"):
+
+                    unwrapped = content_blocks[0].get("text", "")
+
+                    if unwrapped.startswith(("{{", "[")):
+                        try:
+                            return json.loads(unwrapped)
+                        except json.JSONDecodeError:
+                            return unwrapped
+
+                    return unwrapped
+
+            return result_data
+        else:
+            raise RuntimeError("MCP streamable_http response missing result field")
+
+    except Exception as e:  # noqa: BLE001 - Top-level error handler for MCP tool call
+        error_type = type(e).__name__
+        error_msg = str(e)
+        print(f"\n{{'='*60}}", file=sys.stderr)  # noqa: T201
+        print(f"ERROR in _call_mcp_tool_streamable_http", file=sys.stderr)  # noqa: T201
+        print(f"{{'='*60}}", file=sys.stderr)  # noqa: T201
+        print(f"Error Type: {{error_type}}", file=sys.stderr)  # noqa: T201
+        print(f"Error Message: {{error_msg}}", file=sys.stderr)  # noqa: T201
+        print(f"Server: {{server_name}}", file=sys.stderr)  # noqa: T201
+        print(f"Tool: {{tool_name}}", file=sys.stderr)  # noqa: T201
+        print(f"Arguments: {{arguments}}", file=sys.stderr)  # noqa: T201
+        print(f"\nFull Traceback:", file=sys.stderr)  # noqa: T201
+        traceback.print_exc(file=sys.stderr)
+        print(f"{{'='*60}}\n", file=sys.stderr)  # noqa: T201
+        raise
+
+
 def _call_mcp_tool_stdio(server_name: str, tool_name: str, arguments: dict[str, Any]) -> Any:
     """Call an MCP tool via stdio transport (subprocess).
 
@@ -878,8 +975,10 @@ def _call_mcp_tool(server_name: str, tool_name: str, arguments: dict[str, Any]) 
 
     transport = config.get("transport", "stdio")
 
-    if transport in ("sse", "http", "streamable_http"):
+    if transport in ("sse", "http"):
         return _call_mcp_tool_sse(server_name, tool_name, arguments)
+    elif transport == "streamable_http":
+        return _call_mcp_tool_streamable_http(server_name, tool_name, arguments)
     else:
         return _call_mcp_tool_stdio(server_name, tool_name, arguments)
 
