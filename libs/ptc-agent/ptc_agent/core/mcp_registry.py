@@ -10,7 +10,7 @@ import structlog
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import streamablehttp_client
 
 from ptc_agent.config.core import CoreConfig, MCPServerConfig
 
@@ -314,7 +314,7 @@ class MCPServerConnector:
                     msg = f"URL required for streamable_http transport: {self.config.name}"
                     raise ValueError(msg)
 
-                async with streamable_http_client(url) as (read_stream, write_stream), ClientSession(read_stream, write_stream) as session:
+                async with streamablehttp_client(url) as (read_stream, write_stream), ClientSession(read_stream, write_stream) as session:
                     self.session = session
 
                     # Initialize and discover tools
