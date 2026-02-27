@@ -314,7 +314,7 @@ class MCPServerConnector:
                     msg = f"URL required for streamable_http transport: {self.config.name}"
                     raise ValueError(msg)
 
-                async with streamablehttp_client(url) as (read_stream, write_stream), ClientSession(read_stream, write_stream) as session:
+                async with streamablehttp_client(url) as (read_stream, write_stream, _get_session_id), ClientSession(read_stream, write_stream) as session:
                     self.session = session
 
                     # Initialize and discover tools
